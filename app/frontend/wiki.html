@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wiki Browser</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="site-shell app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Local Wiki Reader</p>
+          <h1>Wiki 浏览界面</h1>
+        </div>
+        <nav class="topnav">
+          <a href="/chat">Agent Chat</a>
+          <a class="active" href="/wiki">Wiki Browser</a>
+        </nav>
+      </header>
+
+      <main class="wiki-grid">
+        <aside class="panel wiki-sidebar">
+          <div class="search-block">
+            <label for="wiki-search">搜索页面</label>
+            <input id="wiki-search" type="search" placeholder="输入标题或关键词" />
+          </div>
+          <div id="wiki-list" class="wiki-list"></div>
+        </aside>
+
+        <section class="panel wiki-content-panel">
+          <div class="wiki-meta">
+            <div>
+              <p id="wiki-category" class="eyebrow">Loading</p>
+              <h2 id="wiki-title">正在加载页面</h2>
+            </div>
+            <a id="open-in-chat" class="button button-secondary" href="/chat">去聊天里继续问</a>
+          </div>
+          <div id="wiki-summary" class="summary-box"></div>
+          <article id="wiki-content" class="wiki-content"></article>
+        </section>
+      </main>
+    </div>
+
+    <script src="/assets/wiki.js"></script>
+  </body>
+</html>
+

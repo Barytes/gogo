@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Research KB MVP</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="site-shell app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Research Knowledge Base Workbench</p>
+          <h1>左侧看 Wiki，右侧直接和 Agent 对话</h1>
+        </div>
+        <nav class="topnav">
+          <a class="active" href="/">Workbench</a>
+        </nav>
+      </header>
+
+      <main class="workbench-grid">
+        <section class="workbench-wiki">
+          <div class="panel wiki-sidebar">
+            <div class="source-switch" role="tablist" aria-label="Content source">
+              <button id="mode-wiki" class="source-switch-button active" type="button">
+                Wiki
+              </button>
+              <button id="mode-raw" class="source-switch-button" type="button">
+                Raw
+              </button>
+            </div>
+            <div class="search-block">
+              <label for="wiki-search">搜索内容</label>
+              <input id="wiki-search" type="search" placeholder="输入标题、关键词或文件名" />
+            </div>
+            <div id="wiki-list" class="wiki-list"></div>
+          </div>
+
+          <section class="panel wiki-content-panel">
+            <div class="wiki-meta">
+              <div>
+                <p id="wiki-category" class="eyebrow">Loading</p>
+                <h2 id="wiki-title">正在加载页面</h2>
+              </div>
+              <div class="detail-actions">
+                <a
+                  id="open-source-file"
+                  class="button button-secondary hidden"
+                  href="#"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  打开原文件
+                </a>
+                <button id="quote-into-chat" class="button button-secondary" type="button">
+                  引用到提问框
+                </button>
+              </div>
+            </div>
+            <div id="wiki-summary" class="summary-box"></div>
+            <article id="wiki-content" class="wiki-content"></article>
+          </section>
+        </section>
+
+        <section class="panel chat-panel unified-chat-panel">
+          <div class="chat-panel-header">
+            <div>
+              <p class="eyebrow">Mock Agent Runtime</p>
+              <h2>Agent 对话</h2>
+            </div>
+            <p class="helper-text">
+              当前是模拟答复，但会真实检索本地 wiki 页面。
+            </p>
+          </div>
+
+          <section class="chat-side-info">
+            <div>
+              <p class="eyebrow">Try Asking</p>
+              <div id="suggestions" class="chip-list"></div>
+            </div>
+            <div class="mini-card">
+              <p class="mini-label">当前后端行为</p>
+              <p>
+                这里还没有接真实模型，<code>/api/chat</code>
+                会根据本地 wiki 的关键词匹配结果生成一段模拟回复。
+              </p>
+            </div>
+          </section>
+
+          <div id="messages" class="messages"></div>
+          <form id="chat-form" class="chat-form">
+            <textarea
+              id="chat-input"
+              name="message"
+              rows="3"
+              placeholder="问点什么，比如：这个方向有哪些值得做的 gap？"
+            ></textarea>
+            <div class="chat-actions">
+              <p class="helper-text">可以先在左边选中一个 wiki 页面，再把它带进问题里。</p>
+              <button class="button button-primary" type="submit">发送</button>
+            </div>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="/assets/wiki.js"></script>
+    <script src="/assets/chat.js"></script>
+  </body>
+</html>

@@ -1,0 +1,157 @@
+const messagesEl = document.querySelector("#messages");
+const formEl = document.querySelector("#chat-form");
+const inputEl = document.querySelector("#chat-input");
+const suggestionsEl = document.querySelector("#suggestions");
+
+const history = [];
+
+function focusChatInput() {
+  if (!inputEl) {
+    return;
+  }
+  inputEl.focus();
+}
+
+function injectPrompt(text, replace = false) {
+  if (!inputEl || !text) {
+    return;
+  }
+
+  const nextValue = replace || !inputEl.value.trim()
+    ? text
+    : `${inputEl.value.trim()}\n\n${text}`;
+  inputEl.value = nextValue;
+  focusChatInput();
+}
+
+window.ChatWorkbench = {
+  focusInput: focusChatInput,
+  injectPrompt,
+};
+
+function appendMessage(role, content, consultedPages = []) {
+  const wrapper = document.createElement("article");
+  wrapper.className = `message message-${role}`;
+
+  const text = document.createElement("p");
+  text.textContent = content;
+  wrapper.appendChild(text);
+
+  if (consultedPages.length) {
+    const meta = document.createElement("div");
+    meta.className = "message-meta";
+    consultedPages.forEach((page) => {
+      const link = document.createElement("button");
+      link.className = "message-link";
+      link.type = "button";
+      link.textContent = page.title;
+      link.addEventListener("click", () => {
+        if (window.WikiWorkbench?.openPage) {
+          window.WikiWorkbench.openPage(page.path);
+        } else {
+          window.location.href = `/?page=${encodeURIComponent(page.path)}`;
+        }
+      });
+      meta.appendChild(link);
+    });
+    wrapper.appendChild(meta);
+  }
+
+  messagesEl.appendChild(wrapper);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function setSuggestions(items) {
+  suggestionsEl.innerHTML = "";
+  items.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chip";
+    button.textContent = item;
+    button.addEventListener("click", () => {
+      injectPrompt(item, true);
+    });
+    suggestionsEl.appendChild(button);
+  });
+}
+
+async function loadSuggestions() {
+  try {
+    const response = await fetch("/api/chat/suggestions");
+    const data = await response.json();
+    setSuggestions(data.items || []);
+  } catch (error) {
+    setSuggestions([
+      "这个方向有哪些值得做的 gap？",
+      "帮我理解 wiki 的结构。",
+    ]);
+  }
+}
+
+async function sendMessage(message) {
+  appendMessage("user", message);
+  history.push({ role: "user", content: message });
+
+  const pending = document.createElement("article");
+  pending.className = "message message-assistant";
+  pending.dataset.pending = "true";
+  pending.innerHTML = "<p>正在生成模拟答复...</p>";
+  messagesEl.appendChild(pending);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message,
+        history,
+      }),
+    });
+    const data = await response.json();
+
+    pending.remove();
+    appendMessage("assistant", data.message, data.consulted_pages || []);
+    history.push({ role: "assistant", content: data.message });
+
+    if (Array.isArray(data.suggested_prompts) && data.suggested_prompts.length) {
+      setSuggestions(data.suggested_prompts);
+    }
+  } catch (error) {
+    pending.remove();
+    appendMessage(
+      "assistant",
+      "后端暂时没有返回结果。当前页面已经接好了调用链路，但服务可能还没启动。"
+    );
+  }
+}
+
+formEl.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = inputEl.value.trim();
+  if (!message) {
+    return;
+  }
+  inputEl.value = "";
+  await sendMessage(message);
+});
+
+appendMessage(
+  "assistant",
+  "这里是一个模拟的 agent chat。你现在发出的消息会进入 FastAPI 后端，由后端结合本地 wiki 页面生成 mock 回复。"
+);
+loadSuggestions();
+
+window.addEventListener("wiki:quote", (event) => {
+  const detail = event.detail || {};
+  if (!detail.path || !detail.title) {
+    return;
+  }
+
+  injectPrompt(
+    `请结合这个 wiki 页面继续分析：${detail.title}（${detail.path}）`,
+    false
+  );
+});

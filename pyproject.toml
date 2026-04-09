@@ -1,0 +1,13 @@
+[project]
+name = "gogo-web-mvp"
+version = "0.1.0"
+description = "FastAPI web MVP for the research knowledge base."
+requires-python = ">=3.9"
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "python-dotenv>=1.0,<2.0",
+  "uvicorn[standard]>=0.30,<1.0",
+]
+
+[tool.uv]
+package = false
