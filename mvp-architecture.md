@@ -30,8 +30,8 @@
 ```text
 Browser
   -> Unified Workbench
-     - Wiki mode: wiki/raw main + chat floating
-     - Chat mode: chat main + wiki/raw floating
+     - Wiki mode: wiki/raw full canvas + chat right overlay
+     - Chat mode: chat full canvas + wiki/raw right overlay
             |
             v
     FastAPI Backend
@@ -146,8 +146,9 @@ gogo-app/
 
 - 把 wiki 浏览和 chat 对话放进同一个页面
 - 支持 `Wiki 模式` 与 `Chat 模式`
-- Wiki 模式下以 wiki/raw 为主，chat 变成可隐藏浮窗
-- Chat 模式下以 chat 为主，wiki/raw 变成可隐藏浮窗
+- 主区域始终占满工作台
+- Wiki 模式下以 wiki/raw 为主，chat 变成右侧可隐藏浮窗，并覆盖在主界面之上
+- Chat 模式下以 chat 为主，wiki/raw 变成右侧可隐藏浮窗，并覆盖在主界面之上
 - 支持在 wiki 页面与 chat 输入框之间做联动
 - 支持从 raw 材料打开原始文件
 

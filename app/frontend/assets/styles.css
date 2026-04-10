@@ -170,6 +170,7 @@ code {
   display: grid;
   grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
   gap: 20px;
+  width: 100%;
 }
 
 .workbench-modebar {
@@ -486,6 +487,8 @@ code {
 .wiki-list {
   display: grid;
   gap: 16px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   padding-right: 4px;
 }
@@ -634,9 +637,10 @@ body.layout-wiki .unified-chat-panel {
   bottom: 24px;
   top: auto;
   width: min(420px, calc(100vw - 40px));
-  max-height: min(72vh, 760px);
+  height: min(72vh, 760px);
   min-height: auto;
   z-index: 30;
+  overflow: hidden;
 }
 
 body.layout-wiki .unified-chat-panel .chat-side-info {
@@ -661,23 +665,31 @@ body.layout-chat .unified-chat-panel {
 
 body.layout-chat .workbench-wiki {
   position: fixed;
-  left: 24px;
+  right: 24px;
   bottom: 24px;
+  left: auto;
   width: min(620px, calc(100vw - 40px));
-  max-height: min(78vh, 860px);
+  height: min(78vh, 860px);
   grid-template-columns: 1fr;
+  grid-template-rows: minmax(220px, 280px) minmax(0, 1fr);
+  align-items: stretch;
   z-index: 30;
 }
 
 body.layout-chat .workbench-wiki .wiki-sidebar {
-  min-height: auto;
-  max-height: 260px;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
 }
 
 body.layout-chat .workbench-wiki .wiki-content-panel {
-  min-height: auto;
-  max-height: calc(78vh - 280px);
+  min-height: 0;
+  max-height: none;
   overflow: auto;
+}
+
+body.layout-chat .workbench-wiki .wiki-list {
+  min-height: 0;
 }
 
 body.layout-chat.wiki-hidden .workbench-wiki {
@@ -717,6 +729,7 @@ body.layout-chat.wiki-hidden .workbench-wiki {
   body.layout-chat .workbench-wiki {
     position: static;
     width: 100%;
+    height: auto;
     max-height: none;
   }
 
