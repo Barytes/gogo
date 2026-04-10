@@ -19,13 +19,19 @@ This directory contains a lightweight web MVP for the research knowledge base.
 uv sync
 ```
 
-2. Start the server:
+2. If you want `AGENT_MODE=pi`, install the Pi SDK dependency:
+
+```bash
+npm install
+```
+
+3. Start the server:
 
 ```bash
 uv run uvicorn app.backend.main:app --reload
 ```
 
-3. Open:
+4. Open:
 
 - `http://127.0.0.1:8000/`
 - `http://127.0.0.1:8000/chat`
@@ -49,7 +55,7 @@ If this variable is not set, the app will still try the same sibling-path defaul
 
 - `/api/chat` supports two modes:
   - `AGENT_MODE=mock`: simulated local answer
-  - `AGENT_MODE=pi`: Pi CLI skeleton integration
+  - `AGENT_MODE=pi`: Pi SDK bridge integration
   - `AGENT_MODE=my-agent-loop`: import and call the local `my-agent-loop`
 - `/api/wiki/*` reads the external knowledge-base repository through `KNOWLEDGE_BASE_DIR`.
 - `/api/raw/*` reads source materials under the external `raw/` directory.
@@ -62,12 +68,13 @@ You do not need to copy the Pi agent source code into this repository.
 
 Recommended Pi approach:
 
-1. install Pi normally on the runtime machine
-2. make sure the `pi` command is available on `PATH`
+1. install Node.js on the runtime machine
+2. run `npm install` inside `gogo-app`
 3. set `AGENT_MODE=pi` in `.env`
-4. optionally configure `PI_COMMAND`, `PI_TIMEOUT_SECONDS`, `PI_WORKDIR`, and `PI_EXTRA_ARGS`
+4. optionally configure `PI_NODE_COMMAND`, `PI_TIMEOUT_SECONDS`, and `PI_WORKDIR`
+5. make sure Pi-compatible provider credentials are already configured for the SDK on that machine
 
-The current implementation is a CLI-based integration skeleton, not a bundled Pi runtime.
+The current implementation uses a local Node bridge that imports `@mariozechner/pi-coding-agent` and creates an in-memory SDK session with read-only tools.
 
 ## How `my-agent-loop` Is Meant To Be Integrated
 

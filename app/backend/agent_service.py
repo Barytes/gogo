@@ -11,9 +11,9 @@ from .config import (
     get_agent_mode,
     get_my_agent_loop_dir,
     get_my_agent_loop_model,
-    get_pi_command,
-    get_pi_command_path,
-    get_pi_extra_args,
+    get_pi_node_command,
+    get_pi_node_command_path,
+    get_pi_sdk_bridge_path,
     get_pi_timeout_seconds,
     get_pi_workdir,
 )
@@ -23,12 +23,14 @@ from .wiki_service import search_pages
 
 def get_agent_backend_status() -> dict[str, Any]:
     my_loop_dir = get_my_agent_loop_dir()
+    pi_sdk_bridge_path = get_pi_sdk_bridge_path()
     return {
         "mode": get_agent_mode(),
-        "pi_command": get_pi_command(),
-        "pi_command_path": get_pi_command_path(),
+        "pi_node_command": get_pi_node_command(),
+        "pi_node_command_path": get_pi_node_command_path(),
+        "pi_sdk_bridge_path": str(pi_sdk_bridge_path),
         "pi_workdir": str(get_pi_workdir()),
-        "pi_available": bool(get_pi_command_path()),
+        "pi_available": bool(get_pi_node_command_path()) and pi_sdk_bridge_path.exists(),
         "my_agent_loop_dir": str(my_loop_dir),
         "my_agent_loop_available": (my_loop_dir / "main.py").exists(),
     }
@@ -243,38 +245,48 @@ def run_agent_chat(message: str, history: list[dict[str, str]] | None = None) ->
     if mode != "pi":
         return simulate_chat(message=message, history=history)
 
-    pi_command_path = get_pi_command_path()
-    if not pi_command_path:
+    pi_node_command_path = get_pi_node_command_path()
+    if not pi_node_command_path:
         fallback = simulate_chat(message=message, history=history)
         fallback["mode"] = "mock-fallback"
         fallback["message"] = (
-            "当前 `.env` 已配置为 `AGENT_MODE=pi`，但运行机器上没有找到 `pi` 命令。\n"
-            "请先在运行设备上安装 Pi coding agent，再重启服务。\n\n"
+            "当前 `.env` 已配置为 `AGENT_MODE=pi`，但运行机器上没有找到可用的 Node.js。\n"
+            "请先安装 Node.js，并为 gogo-app 安装 Pi SDK 依赖后再重启服务。\n\n"
             f"{fallback['message']}"
         )
         fallback["warnings"] = [
-            "Pi command not found on PATH.",
-            "Install Pi on the runtime machine, or switch AGENT_MODE back to mock.",
+            "Node.js command not found on PATH.",
+            "Install Node.js and the Pi SDK dependency, or switch AGENT_MODE back to mock.",
         ]
+        return fallback
+
+    pi_sdk_bridge_path = get_pi_sdk_bridge_path()
+    if not pi_sdk_bridge_path.exists():
+        fallback = simulate_chat(message=message, history=history)
+        fallback["mode"] = "mock-fallback"
+        fallback["message"] = (
+            "Pi SDK bridge 脚本不存在，当前先回退到 mock 回复。\n\n"
+            f"{fallback['message']}"
+        )
+        fallback["warnings"] = ["Pi SDK bridge script not found."]
         return fallback
 
     wiki_hits, raw_hits = _collect_context(message)
     prompt = _build_pi_prompt(message, history, wiki_hits, raw_hits)
     system_prompt = _build_pi_system_prompt()
 
-    command = [
-        pi_command_path,
-        "--json",
-        "--system-prompt",
-        system_prompt,
-        prompt,
-        *get_pi_extra_args(),
-    ]
+    command = [pi_node_command_path, str(pi_sdk_bridge_path)]
+    bridge_payload = {
+        "cwd": str(get_pi_workdir()),
+        "system_prompt": system_prompt,
+        "prompt": prompt,
+    }
 
     try:
         result = subprocess.run(
             command,
             cwd=str(get_pi_workdir()),
+            input=json.dumps(bridge_payload),
             capture_output=True,
             text=True,
             timeout=get_pi_timeout_seconds(),
@@ -284,10 +296,10 @@ def run_agent_chat(message: str, history: list[dict[str, str]] | None = None) ->
         fallback = simulate_chat(message=message, history=history)
         fallback["mode"] = "mock-fallback"
         fallback["message"] = (
-            "Pi agent 调用超时，当前先回退到 mock 回复。\n\n"
+            "Pi SDK 调用超时，当前先回退到 mock 回复。\n\n"
             f"{fallback['message']}"
         )
-        fallback["warnings"] = ["Pi command timed out."]
+        fallback["warnings"] = ["Pi SDK bridge timed out."]
         return fallback
 
     if result.returncode != 0:
@@ -295,11 +307,11 @@ def run_agent_chat(message: str, history: list[dict[str, str]] | None = None) ->
         stderr = (result.stderr or "").strip()
         fallback["mode"] = "mock-fallback"
         fallback["message"] = (
-            "Pi agent 调用失败，当前先回退到 mock 回复。\n"
+            "Pi SDK 调用失败，当前先回退到 mock 回复。\n"
             f"Pi stderr: {stderr or 'no stderr output'}\n\n"
             f"{fallback['message']}"
         )
-        fallback["warnings"] = [stderr or "Pi command exited with a non-zero status."]
+        fallback["warnings"] = [stderr or "Pi SDK bridge exited with a non-zero status."]
         return fallback
 
     consulted_pages = [
@@ -323,14 +335,38 @@ def run_agent_chat(message: str, history: list[dict[str, str]] | None = None) ->
         for item in raw_hits
     )
 
-    message_text = "Pi agent 未返回可见文本。"
-    for line in (result.stdout or "").splitlines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if event.get("type") == "assistant_message" and event.get("text"):
-            message_text = event["text"]
+    try:
+        pi_response = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError:
+        fallback = simulate_chat(message=message, history=history)
+        fallback["mode"] = "mock-fallback"
+        fallback["message"] = (
+            "Pi SDK 返回了无法解析的响应，当前先回退到 mock 回复。\n\n"
+            f"{fallback['message']}"
+        )
+        fallback["warnings"] = ["Pi SDK bridge returned invalid JSON."]
+        return fallback
+
+    if not pi_response.get("ok"):
+        fallback = simulate_chat(message=message, history=history)
+        bridge_error = str(
+            pi_response.get("error") or "Pi SDK bridge reported an unknown error."
+        )
+        fallback["mode"] = "mock-fallback"
+        fallback["message"] = (
+            "Pi SDK 未能成功完成请求，当前先回退到 mock 回复。\n"
+            f"Pi error: {bridge_error}\n\n"
+            f"{fallback['message']}"
+        )
+        fallback["warnings"] = [bridge_error]
+        return fallback
+
+    message_text = (str(pi_response.get("message") or "")).strip() or "Pi SDK 未返回可见文本。"
+    warnings = [
+        str(item).strip()
+        for item in pi_response.get("warnings", [])
+        if str(item).strip()
+    ]
 
     return {
         "mode": "pi",
@@ -342,5 +378,5 @@ def run_agent_chat(message: str, history: list[dict[str, str]] | None = None) ->
             "这些页面之间的主要张力是什么？",
             "如果只做一个下一步实验，最该做什么？",
         ],
-        "warnings": [],
+        "warnings": warnings,
     }

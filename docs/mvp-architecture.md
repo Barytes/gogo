@@ -13,7 +13,7 @@
 - 对话区已经接上后端接口，但当前是 mock agent
 - 内容区尽量真实读取独立 knowledge-base repo 中的 `wiki/` 和 `raw/`
 - 整体使用 `uv + FastAPI + 静态前端`
-- 后端已经预留 Pi CLI 和 `my-agent-loop` 集成骨架
+- 后端已经预留 Pi SDK 和 `my-agent-loop` 集成骨架
 
 ---
 
@@ -62,7 +62,7 @@ Browser
 | 后端 | FastAPI | 负责页面分发和 API |
 | Python 管理 | `uv` | 用于依赖安装与运行 |
 | 内容存储 | Markdown 与原始文件 | 通过 `KNOWLEDGE_BASE_DIR` 读取外部 knowledge-base repo |
-| Agent 对话 | Mock / Pi / my-agent-loop | 默认 mock，可切换到安装在运行设备上的 `pi`，或导入本地 `my-agent-loop` |
+| Agent 对话 | Mock / Pi / my-agent-loop | 默认 mock，可切换到本地 Node bridge + Pi SDK，或导入本地 `my-agent-loop` |
 
 ---
 
@@ -83,6 +83,7 @@ workspace/
     │   │   ├── config.py
     │   │   ├── agent_service.py
     │   │   ├── main.py
+    │   │   ├── pi_sdk_bridge.mjs
     │   │   ├── chat_service.py
     │   │   ├── raw_service.py
     │   │   └── wiki_service.py
@@ -99,6 +100,7 @@ workspace/
     ├── .env
     ├── AGENTS.md
     ├── README.md
+    ├── package.json
     ├── pyproject.toml
     └── uv.lock
 ```
@@ -112,6 +114,7 @@ gogo-app/
 │   │   ├── config.py
 │   │   ├── agent_service.py
 │   │   ├── main.py
+│   │   ├── pi_sdk_bridge.mjs
 │   │   ├── chat_service.py
 │   │   ├── raw_service.py
 │   │   └── wiki_service.py
@@ -126,6 +129,7 @@ gogo-app/
 │   │       └── wiki.js
 │   └── README.md
 ├── README.md
+├── package.json
 ├── pyproject.toml
 └── uv.lock
 ```
@@ -191,8 +195,8 @@ gogo-app/
 - 提供 wiki 浏览 API
 - 挂载静态资源
 - 暴露当前绑定的 knowledge-base 路径
-- 根据配置在 mock 与 Pi CLI 之间切换 agent 后端
-- 根据配置在 mock、Pi CLI 与 `my-agent-loop` 之间切换 agent 后端
+- 根据配置在 mock 与 Pi SDK 之间切换 agent 后端
+- 根据配置在 mock、Pi SDK 与 `my-agent-loop` 之间切换 agent 后端
 
 ### 页面路由
 
@@ -267,14 +271,14 @@ gogo-app/
 - 作为 `/api/chat` 的统一入口
 - 根据 `AGENT_MODE` 选择 mock 或 Pi
 - 在 Pi 模式下组织本地检索上下文
-- 通过子进程调用安装在运行设备上的 `pi` CLI
+- 通过子进程调用本地 Node bridge，再由 bridge 使用 Pi SDK 创建会话
 - Pi 不可用时回退到 mock
 
 Pi 集成原则：
 
 - 不把 Pi 源码包含进当前 repo
-- 只要求运行机器上正常安装 `pi`
-- 通过 `.env` 和 CLI 参数完成集成
+- 只要求运行机器上安装 Node.js，并在 app repo 内安装 Pi SDK 依赖
+- 通过 `.env` 指定 Node 运行时与工作目录
 
 ### 4. `my-agent-loop` 集成
 
@@ -340,7 +344,7 @@ Browser -> 若是其他二进制文件，打开 /raw/file?path=...
 ```text
 Browser -> POST /api/chat
 FastAPI -> agent_service
-agent_service -> mock path、Pi CLI path 或 my-agent-loop path
+agent_service -> mock path、Pi SDK bridge path 或 my-agent-loop path
 agent_service -> wiki/raw retrieval
 agent_service -> 返回回复 + 相关页面
 Browser -> 渲染回复
@@ -361,7 +365,7 @@ Browser -> 渲染回复
 - raw 材料读取、列表、搜索、详情 API
 - raw 文件打开入口
 - mock chat 接口
-- Pi CLI 集成骨架
+- Pi SDK 集成骨架
 - my-agent-loop 集成骨架
 - `uv` 项目管理
 - 独立 app repo + 独立 knowledge-base repo 的拆分结构
@@ -433,6 +437,12 @@ Browser -> 渲染回复
 uv sync
 ```
 
+如果要启用 Pi SDK 模式，还需要在 app repo 安装 Node 依赖：
+
+```bash
+npm install
+```
+
 启动服务：
 
 ```bash
@@ -449,7 +459,7 @@ Pi 集成也通过 `.env` 控制：
 
 ```bash
 AGENT_MODE=mock
-PI_COMMAND=pi
+PI_NODE_COMMAND=node
 PI_TIMEOUT_SECONDS=180
 ```
 

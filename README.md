@@ -15,16 +15,35 @@ The UI can now browse both maintained `wiki/` pages and source materials under `
 
 ## Pi Integration
 
-This repository now includes a Pi integration skeleton for `/api/chat`.
+This repository now includes a Pi SDK integration path for `/api/chat`.
 
 You do not need to vendor the Pi source code into this repository.
 The recommended setup is:
 
-1. install Pi normally on the machine that runs this FastAPI app
-2. keep `gogo-app` and `knowledge-base` as separate repositories
-3. switch `.env` from `AGENT_MODE=mock` to `AGENT_MODE=pi`
+1. install Node.js on the machine that runs this FastAPI app
+2. install the Pi SDK dependency inside `gogo-app`
+3. keep `gogo-app` and `knowledge-base` as separate repositories
+4. switch `.env` from `AGENT_MODE=mock` to `AGENT_MODE=pi`
 
-The backend will call the `pi` CLI when available, and fall back to mock mode when it is not.
+```bash
+npm install
+```
+
+The backend will call a local Node bridge that uses `@mariozechner/pi-coding-agent` via its SDK, and will fall back to mock mode when Node or the SDK dependency is not available.
+
+Pi SDK mode uses the knowledge-base directory as its working directory and currently gives Pi a read-only tool set.
+
+## Pi Runtime Assumptions
+
+Pi SDK mode does not copy Pi source into this repo.
+
+It assumes:
+
+1. `node` is available on `PATH`
+2. `@mariozechner/pi-coding-agent` is installed in this repo
+3. your Pi provider credentials are already configured the way Pi expects on this machine
+
+That last point means model/provider selection is currently delegated to Pi's own auth/config resolution rather than a custom app-level provider adapter.
 
 ## my-agent-loop Integration
 
@@ -44,7 +63,8 @@ This integration imports and calls the local loop directly. It does not require 
 1. Copy or create `.env`
 2. Point `KNOWLEDGE_BASE_DIR` at your local knowledge-base repo
 3. Install dependencies with `uv`
-4. Run the server
+4. If you want `AGENT_MODE=pi`, also run `npm install`
+5. Run the server
 
 ```bash
 uv sync

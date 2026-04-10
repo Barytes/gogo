@@ -1,0 +1,8 @@
+{
+  "name": "gogo-app",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "latest"
+  }
+}
