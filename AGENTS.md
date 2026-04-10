@@ -14,7 +14,7 @@ For knowledge-base content rules, consult the external knowledge-base repo, espe
 
 ## Architecture Sync Rule
 
-Whenever a code change makes any part of `mvp-architecture.md` inaccurate, update the affected part of `mvp-architecture.md` in the same change.
+Whenever a code change makes any part of `docs/mvp-architecture.md` inaccurate, update the affected part of `docs/mvp-architecture.md` in the same change.
 
 This includes, when relevant:
 
@@ -26,10 +26,10 @@ This includes, when relevant:
 - data flow descriptions
 - current system boundaries
 
-Do not leave `mvp-architecture.md` describing an older implementation after the code has changed.
+Do not leave `docs/mvp-architecture.md` describing an older implementation after the code has changed.
 
 ## Documentation Principle
 
-Keep `mvp-architecture.md` aligned with the current implementation, not an outdated plan.
+Keep `docs/mvp-architecture.md` aligned with the current implementation, not an outdated plan.
 
 If the implementation and the document diverge, the change is not complete until the document is corrected.

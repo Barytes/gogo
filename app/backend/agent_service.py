@@ -90,6 +90,32 @@ def _build_pi_system_prompt() -> str:
     return "\n".join(prompt_lines)
 
 
+def _build_consulted_pages(
+    wiki_hits: list[dict[str, Any]], raw_hits: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    pages = [
+        {
+            "path": page["path"],
+            "title": page["title"],
+            "category": page["category"],
+            "summary": page["summary"],
+            "source": "wiki",
+        }
+        for page in wiki_hits
+    ]
+    pages.extend(
+        {
+            "path": item["path"],
+            "title": item["title"],
+            "category": item["category"],
+            "summary": item["summary"],
+            "source": "raw",
+        }
+        for item in raw_hits
+    )
+    return pages
+
+
 _MY_AGENT_LOOP_MODULE: Any | None = None
 
 
@@ -200,31 +226,10 @@ def _run_my_agent_loop_chat(message: str, history: list[dict[str, str]]) -> dict
         fallback["warnings"] = [f"my-agent-loop execution failed: {exc}"]
         return fallback
 
-    consulted_pages = [
-        {
-            "path": page["path"],
-            "title": page["title"],
-            "category": page["category"],
-            "summary": page["summary"],
-            "source": "wiki",
-        }
-        for page in wiki_hits
-    ]
-    consulted_pages.extend(
-        {
-            "path": item["path"],
-            "title": item["title"],
-            "category": item["category"],
-            "summary": item["summary"],
-            "source": "raw",
-        }
-        for item in raw_hits
-    )
-
     return {
         "mode": "my-agent-loop",
         "message": response_text,
-        "consulted_pages": consulted_pages,
+        "consulted_pages": _build_consulted_pages(wiki_hits, raw_hits),
         "history_length": len(history) + 1,
         "suggested_prompts": [
             "请结合联网搜索再补充这一点。",
@@ -314,27 +319,6 @@ def run_agent_chat(message: str, history: list[dict[str, str]] | None = None) ->
         fallback["warnings"] = [stderr or "Pi SDK bridge exited with a non-zero status."]
         return fallback
 
-    consulted_pages = [
-        {
-            "path": page["path"],
-            "title": page["title"],
-            "category": page["category"],
-            "summary": page["summary"],
-            "source": "wiki",
-        }
-        for page in wiki_hits
-    ]
-    consulted_pages.extend(
-        {
-            "path": item["path"],
-            "title": item["title"],
-            "category": item["category"],
-            "summary": item["summary"],
-            "source": "raw",
-        }
-        for item in raw_hits
-    )
-
     try:
         pi_response = json.loads(result.stdout or "{}")
     except json.JSONDecodeError:
@@ -371,7 +355,7 @@ def run_agent_chat(message: str, history: list[dict[str, str]] | None = None) ->
     return {
         "mode": "pi",
         "message": message_text,
-        "consulted_pages": consulted_pages,
+        "consulted_pages": _build_consulted_pages(wiki_hits, raw_hits),
         "history_length": len(history) + 1,
         "suggested_prompts": [
             "请基于本地知识库继续展开这个判断。",

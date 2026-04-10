@@ -82,13 +82,11 @@
         <section class="panel chat-panel unified-chat-panel">
           <div class="chat-panel-header">
             <div>
-              <p class="eyebrow">Mock Agent Runtime</p>
+              <p id="agent-runtime-label" class="eyebrow">Agent Runtime</p>
               <h2>Agent 对话</h2>
             </div>
             <div class="chat-panel-actions">
-              <p class="helper-text">
-                当前是模拟答复，但会真实检索本地 wiki 页面。
-              </p>
+              <p id="agent-runtime-helper" class="helper-text">当前会优先结合本地知识库来回答。</p>
               <button id="hide-chat-panel" class="button button-secondary floating-control" type="button">
                 隐藏 Chat
               </button>
@@ -102,9 +100,8 @@
             </div>
             <div class="mini-card">
               <p class="mini-label">当前后端行为</p>
-              <p>
-                这里还没有接真实模型，<code>/api/chat</code>
-                会根据本地 wiki 的关键词匹配结果生成一段模拟回复。
+              <p id="agent-runtime-behavior">
+                <code>/api/chat</code> 会根据当前配置的 agent backend 生成回复，并返回相关本地页面引用。
               </p>
             </div>
           </section>

@@ -2,8 +2,12 @@ const messagesEl = document.querySelector("#messages");
 const formEl = document.querySelector("#chat-form");
 const inputEl = document.querySelector("#chat-input");
 const suggestionsEl = document.querySelector("#suggestions");
+const runtimeLabelEl = document.querySelector("#agent-runtime-label");
+const runtimeHelperEl = document.querySelector("#agent-runtime-helper");
+const runtimeBehaviorEl = document.querySelector("#agent-runtime-behavior");
 
 const history = [];
+let runtimeMode = "unknown";
 
 function focusChatInput() {
   if (!inputEl) {
@@ -76,6 +80,61 @@ function setSuggestions(items) {
   });
 }
 
+function describeRuntime(mode) {
+  if (mode === "pi") {
+    return {
+      label: "Pi SDK Runtime",
+      helper: "当前由 Pi SDK 驱动，并以本地知识库目录作为只读工作区。",
+      behavior: "`/api/chat` 会调用 Pi SDK，会话前会先附上本地 wiki 和 raw 的检索上下文。",
+      welcome: "这里是 Agent 工作台。当前后端是 Pi SDK，会优先结合本地知识库来回答。",
+      pending: "Pi 正在生成答复...",
+    };
+  }
+
+  if (mode === "my-agent-loop") {
+    return {
+      label: "My Agent Loop",
+      helper: "当前由本地 my-agent-loop 驱动，并附带本地知识库检索结果。",
+      behavior: "`/api/chat` 会动态导入本地 my-agent-loop，再把检索到的 wiki/raw 上下文拼入问题。",
+      welcome: "这里是 Agent 工作台。当前后端是 my-agent-loop，会先读取本地知识库检索结果再作答。",
+      pending: "Agent loop 正在生成答复...",
+    };
+  }
+
+  return {
+    label: "Mock Agent Runtime",
+    helper: "当前使用模拟答复，但会真实检索本地知识库页面。",
+    behavior: "`/api/chat` 当前走 mock 路径，会根据本地 wiki 的关键词匹配结果生成回复。",
+    welcome: "这里是 Agent 工作台。当前后端是 mock，会结合本地 wiki 命中结果生成模拟回复。",
+    pending: "正在生成答复...",
+  };
+}
+
+function setRuntimeSummary(mode) {
+  runtimeMode = mode || "mock";
+  const runtime = describeRuntime(runtimeMode);
+  if (runtimeLabelEl) {
+    runtimeLabelEl.textContent = runtime.label;
+  }
+  if (runtimeHelperEl) {
+    runtimeHelperEl.textContent = runtime.helper;
+  }
+  if (runtimeBehaviorEl) {
+    runtimeBehaviorEl.innerHTML = `<code>/api/chat</code> ${runtime.behavior.replace(/^`\/api\/chat`\s*/, "")}`;
+  }
+  return runtime;
+}
+
+async function loadRuntimeStatus() {
+  try {
+    const response = await fetch("/api/health");
+    const data = await response.json();
+    return setRuntimeSummary(data.agent_mode || data.agent_status?.mode || "mock");
+  } catch (error) {
+    return setRuntimeSummary("mock");
+  }
+}
+
 async function loadSuggestions() {
   try {
     const response = await fetch("/api/chat/suggestions");
@@ -93,10 +152,11 @@ async function sendMessage(message) {
   appendMessage("user", message);
   history.push({ role: "user", content: message });
 
+  const runtime = describeRuntime(runtimeMode);
   const pending = document.createElement("article");
   pending.className = "message message-assistant";
   pending.dataset.pending = "true";
-  pending.innerHTML = "<p>正在生成模拟答复...</p>";
+  pending.innerHTML = `<p>${runtime.pending}</p>`;
   messagesEl.appendChild(pending);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 
@@ -139,11 +199,13 @@ formEl.addEventListener("submit", async (event) => {
   await sendMessage(message);
 });
 
-appendMessage(
-  "assistant",
-  "这里是一个模拟的 agent chat。你现在发出的消息会进入 FastAPI 后端，由后端结合本地 wiki 页面生成 mock 回复。"
-);
-loadSuggestions();
+async function bootstrapChat() {
+  const runtime = await loadRuntimeStatus();
+  appendMessage("assistant", runtime.welcome);
+  loadSuggestions();
+}
+
+bootstrapChat();
 
 window.addEventListener("wiki:quote", (event) => {
   const detail = event.detail || {};

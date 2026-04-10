@@ -71,13 +71,13 @@ def wiki_page_shell() -> FileResponse:
 
 
 @app.get("/api/health")
-def healthcheck() -> dict[str, str]:
+def healthcheck() -> dict[str, object]:
     agent_status = get_agent_backend_status()
     return {
         "status": "ok",
         "knowledge_base_dir": str(get_knowledge_base_dir()),
         "agent_mode": agent_status["mode"],
-        "pi_available": str(agent_status["pi_available"]).lower(),
+        "agent_status": agent_status,
     }
 
 

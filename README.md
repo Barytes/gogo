@@ -1,82 +1,64 @@
 # gogo-app
 
-Standalone Web MVP application for browsing and chatting with the external research knowledge base.
+Web workbench for browsing an external research knowledge base and chatting with a local agent backend.
 
-## Repo Boundary
+## What It Does
 
-This repository contains only the application layer:
+- Unified single-page workbench
+- Wiki and raw material browsing
+- Chat panel backed by `mock`, `pi`, or `my-agent-loop`
+- FastAPI backend with simple local-file APIs
+- External knowledge-base repo support via `KNOWLEDGE_BASE_DIR`
 
-- FastAPI backend
-- static frontend workbench
-- app architecture documents
+## Setup
 
-The prompts, wiki pages, and schemas live in a separate `knowledge-base` repository.
-The UI can now browse both maintained `wiki/` pages and source materials under `raw/`.
+1. Create `.env` from `.env.example`.
+2. Point `KNOWLEDGE_BASE_DIR` at your local `knowledge-base` repo.
+3. Install Python dependencies:
 
-## Pi Integration
+```bash
+uv sync
+```
 
-This repository now includes a Pi SDK integration path for `/api/chat`.
-
-You do not need to vendor the Pi source code into this repository.
-The recommended setup is:
-
-1. install Node.js on the machine that runs this FastAPI app
-2. install the Pi SDK dependency inside `gogo-app`
-3. keep `gogo-app` and `knowledge-base` as separate repositories
-4. switch `.env` from `AGENT_MODE=mock` to `AGENT_MODE=pi`
+4. If you want `AGENT_MODE=pi`, install the Node dependency:
 
 ```bash
 npm install
 ```
 
-The backend will call a local Node bridge that uses `@mariozechner/pi-coding-agent` via its SDK, and will fall back to mock mode when Node or the SDK dependency is not available.
-
-Pi SDK mode uses the knowledge-base directory as its working directory and currently gives Pi a read-only tool set.
-
-## Pi Runtime Assumptions
-
-Pi SDK mode does not copy Pi source into this repo.
-
-It assumes:
-
-1. `node` is available on `PATH`
-2. `@mariozechner/pi-coding-agent` is installed in this repo
-3. your Pi provider credentials are already configured the way Pi expects on this machine
-
-That last point means model/provider selection is currently delegated to Pi's own auth/config resolution rather than a custom app-level provider adapter.
-
-## my-agent-loop Integration
-
-This repository can also use your local `my-agent-loop` project as another chat backend mode.
-
-Recommended setup:
-
-1. keep `my-agent-loop` as its own local project directory
-2. point `MY_AGENT_LOOP_DIR` at that directory
-3. set `AGENT_MODE=my-agent-loop`
-4. make sure `gogo-app` has the Python dependencies needed by `my-agent-loop`
-
-This integration imports and calls the local loop directly. It does not require copying the loop source code into `gogo-app`.
-
-## Setup
-
-1. Copy or create `.env`
-2. Point `KNOWLEDGE_BASE_DIR` at your local knowledge-base repo
-3. Install dependencies with `uv`
-4. If you want `AGENT_MODE=pi`, also run `npm install`
-5. Run the server
+5. Start the server:
 
 ```bash
-uv sync
 uv run uvicorn app.backend.main:app --reload
 ```
 
-Open:
+6. Open:
 
 - `http://127.0.0.1:8000/`
 
-## Related Files
+The compatibility routes `http://127.0.0.1:8000/chat` and `http://127.0.0.1:8000/wiki` also open the same workbench page.
 
-- [app/README.md](app/README.md)
-- [mvp-architecture.md](mvp-architecture.md)
+## Agent Modes
+
+- `AGENT_MODE=mock`
+  Returns simulated answers based on local wiki search.
+- `AGENT_MODE=pi`
+  Uses a local Node bridge and the Pi SDK with a read-only tool set rooted at `PI_WORKDIR` or `KNOWLEDGE_BASE_DIR`.
+- `AGENT_MODE=my-agent-loop`
+  Dynamically imports a sibling `my-agent-loop` project and calls its `chat()` entrypoint.
+
+## Repo Boundary
+
+This repo only contains the application layer:
+
+- FastAPI backend
+- static frontend
+- app-facing documentation
+
+Prompt assets, schemas, and knowledge content live in a separate `knowledge-base` repository.
+
+## Docs
+
+- [docs/mvp-architecture.md](docs/mvp-architecture.md)
+- [docs/product-definition-belief.md](docs/product-definition-belief.md)
 - [AGENTS.md](AGENTS.md)
