@@ -1,10 +1,6 @@
 const messagesEl = document.querySelector("#messages");
 const formEl = document.querySelector("#chat-form");
 const inputEl = document.querySelector("#chat-input");
-const suggestionsEl = document.querySelector("#suggestions");
-const runtimeLabelEl = document.querySelector("#agent-runtime-label");
-const runtimeHelperEl = document.querySelector("#agent-runtime-helper");
-const runtimeBehaviorEl = document.querySelector("#agent-runtime-behavior");
 const submitButtonEl = formEl?.querySelector("button[type='submit']");
 
 const history = [];
@@ -494,68 +490,22 @@ function createStreamingAssistantMessage(initialText) {
   };
 }
 
-function setSuggestions(items) {
-  suggestionsEl.innerHTML = "";
-  items.forEach((item) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "chip";
-    button.textContent = item;
-    button.addEventListener("click", () => {
-      injectPrompt(item, true);
-    });
-    suggestionsEl.appendChild(button);
-  });
+function setSuggestions(_items) {
+  // Suggestions UI removed.
 }
 
 function describeRuntime() {
   return {
-    label: "Pi SDK Runtime",
-    helper: "当前由 Pi SDK 驱动，并以本地知识库目录作为只读工作区。",
-    behavior: "`/api/chat/stream` 会流式返回 Pi 的文本增量、过程事件和最终结果。",
-    welcome: "这里是 Agent 工作台。当前后端是 Pi SDK，会优先结合本地知识库来回答。",
     pending: "Pi 正在生成答复...",
   };
 }
 
-function setRuntimeSummary(extraHelper = "") {
-  const runtime = describeRuntime();
-  if (runtimeLabelEl) {
-    runtimeLabelEl.textContent = runtime.label;
-  }
-  if (runtimeHelperEl) {
-    runtimeHelperEl.textContent = extraHelper ? `${runtime.helper} ${extraHelper}` : runtime.helper;
-  }
-  if (runtimeBehaviorEl) {
-    runtimeBehaviorEl.innerHTML = `<code>/api/chat/stream</code> ${runtime.behavior.replace(/^`\/api\/chat\/stream`\s*/, "")}`;
-  }
-  return runtime;
-}
-
 async function loadRuntimeStatus() {
-  try {
-    const response = await fetch("/api/health");
-    const data = await response.json();
-    if (data.agent_status?.pi_available === false) {
-      return setRuntimeSummary("当前运行环境里还缺少 Node 或 Pi bridge。");
-    }
-    return setRuntimeSummary();
-  } catch (error) {
-    return setRuntimeSummary("当前无法读取后端状态。");
-  }
+  // Runtime status UI removed.
 }
 
 async function loadSuggestions() {
-  try {
-    const response = await fetch("/api/chat/suggestions");
-    const data = await response.json();
-    setSuggestions(data.items || []);
-  } catch (error) {
-    setSuggestions([
-      "这个方向有哪些值得做的 gap？",
-      "帮我理解 wiki 的结构。",
-    ]);
-  }
+  // Suggestions UI removed.
 }
 
 async function consumeNdjsonStream(response, onEvent) {
@@ -647,9 +597,6 @@ async function sendMessage(message) {
       if (type === "final") {
         finalPayload = event;
         liveMessage.finalize(event);
-        if (Array.isArray(event.suggested_prompts) && event.suggested_prompts.length) {
-          setSuggestions(event.suggested_prompts);
-        }
         return;
       }
 
@@ -690,15 +637,7 @@ formEl.addEventListener("submit", async (event) => {
 });
 
 async function bootstrapChat() {
-  const runtime = await loadRuntimeStatus();
-  appendMessage("assistant", runtime.welcome, [], [
-    {
-      kind: "status",
-      title: "工作日志已启用",
-      detail: "现在会把 Pi 的过程整理成更像 Codex 的工作日志，而不是原始事件列表。",
-    },
-  ]);
-  loadSuggestions();
+  appendMessage("assistant", "这里是 Agent 对话。");
 }
 
 bootstrapChat();

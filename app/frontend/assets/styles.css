@@ -27,12 +27,17 @@ html,
 body {
   margin: 0;
   min-height: 100%;
+  height: 100%;
   color: var(--text);
   background:
     radial-gradient(circle at top left, rgba(177, 83, 47, 0.12), transparent 28%),
     radial-gradient(circle at right center, rgba(24, 92, 82, 0.14), transparent 34%),
     linear-gradient(180deg, #fbf7f0 0%, var(--bg) 58%, var(--bg-accent) 100%);
   font-family: var(--sans);
+}
+
+body {
+  overflow: hidden;
 }
 
 body::before {
@@ -63,17 +68,21 @@ code {
   width: min(1280px, calc(100vw - 32px));
   margin: 0 auto;
   padding: 28px 0 36px;
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
 }
 
 .topbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
-.topbar h1,
 .hero-card h2,
 .info-card h3,
 .wiki-content h1,
@@ -84,39 +93,25 @@ code {
   letter-spacing: -0.02em;
 }
 
-.topbar h1 {
-  margin-top: 6px;
-  font-size: clamp(2rem, 4vw, 3.4rem);
-  line-height: 0.96;
-}
-
-.topnav {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.topnav a,
 .button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-radius: 999px;
   text-decoration: none;
   border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.92rem;
+  cursor: pointer;
   transition:
     transform 160ms ease,
     background-color 160ms ease,
     border-color 160ms ease;
 }
 
-.topnav a {
-  background: rgba(255, 255, 255, 0.58);
-}
-
-.topnav a.active,
-.topnav a:hover,
 .button:hover {
   transform: translateY(-1px);
   border-color: rgba(24, 92, 82, 0.28);
@@ -163,7 +158,8 @@ code {
 
 .workbench-grid {
   grid-template-columns: minmax(0, 1fr);
-  align-items: start;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .workbench-wiki {
@@ -171,14 +167,7 @@ code {
   grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
   gap: 20px;
   width: 100%;
-}
-
-.workbench-modebar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 18px;
-  margin-bottom: 18px;
+  min-height: 0;
 }
 
 .workspace-switch {
@@ -285,31 +274,36 @@ code {
   align-content: start;
 }
 
-.mini-card,
 .summary-box {
   padding: 16px;
   border-radius: var(--radius-md);
   background: rgba(24, 92, 82, 0.06);
 }
 
-.mini-label {
-  margin: 0 0 8px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--brand);
-}
-
 .chat-panel {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+body.layout-wiki .chat-panel {
   min-height: 72vh;
+}
+
+body.layout-chat .chat-panel {
+  height: 100%;
 }
 
 .unified-chat-panel {
   position: sticky;
   top: 22px;
+}
+
+body.layout-chat .unified-chat-panel {
+  position: relative;
+  top: auto;
 }
 
 .chat-panel-header {
@@ -332,17 +326,12 @@ code {
   letter-spacing: -0.02em;
 }
 
-.chat-side-info {
-  display: grid;
-  gap: 14px;
-  margin-bottom: 18px;
-}
-
 .messages {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
   overflow: auto;
   padding-right: 4px;
 }
@@ -562,6 +551,7 @@ code {
   margin-top: 18px;
   padding-top: 18px;
   border-top: 1px solid var(--line);
+  flex: 0 0 auto;
 }
 
 .chat-form textarea,
@@ -603,6 +593,9 @@ code {
   flex-direction: column;
   gap: 18px;
   min-height: 72vh;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .search-block {
@@ -698,6 +691,11 @@ code {
 
 .wiki-content-panel {
   min-height: 72vh;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .wiki-meta {
@@ -706,6 +704,18 @@ code {
   gap: 18px;
   align-items: flex-start;
   margin-bottom: 18px;
+  flex: 0 0 auto;
+}
+
+.wiki-meta > div:first-child {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.wiki-meta h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .detail-actions {
@@ -713,11 +723,16 @@ code {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .wiki-content {
   font-size: 1.02rem;
   line-height: 1.8;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .wiki-content h1,
@@ -789,6 +804,29 @@ code {
 
 body.layout-wiki .workbench-wiki {
   width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Wiki mode: hide chat-mode specific buttons */
+body.layout-wiki #toggle-wiki-sidebar-open,
+body.layout-wiki #toggle-wiki-sidebar-close,
+body.layout-wiki #hide-wiki-panel-chat {
+  display: none;
+}
+
+body.layout-wiki .wiki-sidebar {
+  display: flex;
+  flex-direction: column;
+  max-height: none;
+  overflow: auto;
+}
+
+.wiki-sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
 }
 
 body.layout-wiki .unified-chat-panel {
@@ -798,18 +836,30 @@ body.layout-wiki .unified-chat-panel {
   top: auto;
   width: min(420px, calc(100vw - 40px));
   height: min(72vh, 760px);
-  min-height: auto;
+  min-height: 480px;
   z-index: 30;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-body.layout-wiki .unified-chat-panel .chat-side-info {
-  display: none;
+body.layout-wiki .unified-chat-panel .chat-panel {
+  height: 100%;
+  min-height: auto;
+}
+
+body.layout-wiki .unified-chat-panel .chat-panel-header {
+  flex: 0 0 auto;
 }
 
 body.layout-wiki .unified-chat-panel .messages {
-  min-height: 260px;
-  max-height: 40vh;
+  flex: 1;
+  min-height: 200px;
+  max-height: none;
+}
+
+body.layout-wiki .unified-chat-panel .chat-form {
+  flex: 0 0 auto;
 }
 
 body.layout-wiki.chat-hidden .unified-chat-panel {
@@ -819,8 +869,9 @@ body.layout-wiki.chat-hidden .unified-chat-panel {
 body.layout-chat .unified-chat-panel {
   position: relative;
   width: 100%;
-  max-height: none;
-  min-height: 78vh;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
 }
 
 body.layout-chat .workbench-wiki {
@@ -828,23 +879,52 @@ body.layout-chat .workbench-wiki {
   right: 24px;
   bottom: 24px;
   left: auto;
-  width: min(620px, calc(100vw - 40px));
+  width: min(520px, calc(100vw - 40px));
   height: min(78vh, 860px);
-  grid-template-columns: 1fr;
-  grid-template-rows: minmax(220px, 280px) minmax(0, 1fr);
-  align-items: stretch;
+  display: flex;
+  flex-direction: column;
   z-index: 30;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
 }
 
-body.layout-chat .workbench-wiki .wiki-sidebar {
-  min-height: 0;
-  max-height: none;
+/* Chat mode: sidebar header styling */
+body.layout-chat .wiki-sidebar-header {
+  padding: 12px 16px;
+  background: rgba(24, 92, 82, 0.06);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+
+.wiki-sidebar {
+  flex: 0 0 auto;
+  max-height: 60vh;
   overflow: hidden;
+  transition: max-height 0.2s ease, padding 0.2s ease;
+}
+
+/* Chat mode: sidebar default hidden */
+body.layout-chat .workbench-wiki .wiki-sidebar {
+  max-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.layout-chat .workbench-wiki .wiki-sidebar.wiki-sidebar-visible {
+  max-height: 50vh;
+  padding: 24px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  background: var(--panel);
+  box-shadow: var(--shadow);
 }
 
 body.layout-chat .workbench-wiki .wiki-content-panel {
+  flex: 1;
   min-height: 0;
-  max-height: none;
   overflow: auto;
 }
 
@@ -857,6 +937,16 @@ body.layout-chat.wiki-hidden .workbench-wiki {
 }
 
 @media (max-width: 1040px) {
+  body {
+    overflow: auto;
+  }
+
+  .site-shell {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
   .landing-grid,
   .app-grid,
   .wiki-grid,
@@ -869,7 +959,6 @@ body.layout-chat.wiki-hidden .workbench-wiki {
   .wiki-meta,
   .chat-actions,
   .chat-panel-header,
-  .workbench-modebar,
   .chat-panel-actions {
     flex-direction: column;
     align-items: stretch;
@@ -879,6 +968,8 @@ body.layout-chat.wiki-hidden .workbench-wiki {
   .wiki-sidebar,
   .wiki-content-panel {
     min-height: auto;
+    max-height: none;
+    overflow: visible;
   }
 
   .unified-chat-panel {
@@ -891,11 +982,20 @@ body.layout-chat.wiki-hidden .workbench-wiki {
     width: 100%;
     height: auto;
     max-height: none;
+    overflow: visible;
   }
 
   body.layout-chat .workbench-wiki .wiki-sidebar,
   body.layout-chat .workbench-wiki .wiki-content-panel {
     max-height: none;
+    overflow: visible;
+  }
+
+  .messages,
+  .wiki-list,
+  .wiki-content {
+    max-height: none;
+    overflow: visible;
   }
 
   .floating-dock {

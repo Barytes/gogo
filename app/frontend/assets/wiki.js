@@ -2,7 +2,6 @@ const listEl = document.querySelector("#wiki-list");
 const searchEl = document.querySelector("#wiki-search");
 const titleEl = document.querySelector("#wiki-title");
 const categoryEl = document.querySelector("#wiki-category");
-const summaryEl = document.querySelector("#wiki-summary");
 const contentEl = document.querySelector("#wiki-content");
 const quoteIntoChatEl = document.querySelector("#quote-into-chat");
 const openSourceFileEl = document.querySelector("#open-source-file");
@@ -224,18 +223,41 @@ async function loadPage(path) {
 
   categoryEl.textContent = `${activeMode} / ${data.category} / ${data.path}`;
   titleEl.textContent = data.title;
-  summaryEl.textContent = data.summary;
   if (renderMode === "markdown") {
     contentEl.innerHTML = markdownToHtml(data.content || "");
+    // 处理内部链接点击
+    contentEl.querySelectorAll("a").forEach((a) => {
+      const href = a.getAttribute("href") || "";
+      if (href.startsWith("/") || href.startsWith("./") || href.startsWith("../") || !href.includes(":")) {
+        // 内部链接：拦截点击，使用 WikiWorkbench 导航
+        a.addEventListener("click", (e) => {
+          e.preventDefault();
+          let targetPath = href;
+          if (href.startsWith("./")) {
+            targetPath = activePath.split("/").slice(0, -1).join("/") + "/" + href.slice(2);
+          } else if (href.startsWith("../")) {
+            const parts = activePath.split("/");
+            const upCount = href.match(/\.\.\//g)?.length || 0;
+            targetPath = parts.slice(0, parts.length - upCount).join("/") + "/" + href.replace(/\.\.\//g, "");
+          }
+          // 规范化路径
+          targetPath = targetPath.replace(/\/+/g, "/").replace(/^\//, "");
+          // 判断是 wiki 还是 raw
+          if (targetPath.endsWith(".md") || targetPath.startsWith("knowledge/")) {
+            window.WikiWorkbench?.openPage?.(targetPath, "wiki");
+          } else if (targetPath.startsWith("raw/")) {
+            window.WikiWorkbench?.openPage?.(targetPath.slice(4), "raw");
+          } else {
+            window.WikiWorkbench?.openPage?.(targetPath, activeMode);
+          }
+        });
+      }
+    });
   } else if (renderMode === "text") {
     contentEl.innerHTML = `<pre><code>${escapeHtml(data.content || "")}</code></pre>`;
   } else if (renderMode === "pdf") {
     contentEl.innerHTML = `
       <div class="pdf-preview-shell">
-        <div class="summary-box">
-          <p>这个 raw 材料是 PDF，当前页面内已经提供预览。</p>
-          <p>如果浏览器预览效果不理想，也可以直接打开原文件。</p>
-        </div>
         <iframe
           class="pdf-preview-frame"
           src="${escapeHtml(data.preview_url || data.download_url || "#")}"
@@ -288,7 +310,6 @@ async function bootstrap() {
   } catch (error) {
     categoryEl.textContent = "unavailable";
     titleEl.textContent = "暂时无法读取内容";
-    summaryEl.textContent = "请先启动 FastAPI 服务，再刷新页面。";
     contentEl.innerHTML = '<p class="empty-state">当前页面已经接好数据结构，但接口还没有返回内容。</p>';
   }
 }
@@ -357,6 +378,60 @@ window.WikiWorkbench = {
     renderList(allPages);
     await loadPage(path);
   },
+  showSidebar: () => {
+    const sidebarEl = document.querySelector(".wiki-sidebar");
+    const openBtn = document.querySelector("#toggle-wiki-sidebar-open");
+    const closeBtn = document.querySelector("#toggle-wiki-sidebar-close");
+    if (!sidebarEl) return;
+
+    sidebarEl.classList.add("wiki-sidebar-visible");
+    if (openBtn) openBtn.classList.add("hidden");
+    if (closeBtn) closeBtn.classList.remove("hidden");
+  },
+  hideSidebar: () => {
+    const sidebarEl = document.querySelector(".wiki-sidebar");
+    const openBtn = document.querySelector("#toggle-wiki-sidebar-open");
+    const closeBtn = document.querySelector("#toggle-wiki-sidebar-close");
+    if (!sidebarEl) return;
+
+    sidebarEl.classList.remove("wiki-sidebar-visible");
+    if (openBtn) openBtn.classList.remove("hidden");
+    if (closeBtn) closeBtn.classList.add("hidden");
+  },
 };
+
+// Toggle sidebar buttons
+const toggleSidebarOpenBtn = document.querySelector("#toggle-wiki-sidebar-open");
+toggleSidebarOpenBtn?.addEventListener("click", () => {
+  console.log("[wiki] toggle-wiki-sidebar-open clicked");
+  const sidebarEl = document.querySelector(".wiki-sidebar");
+  if (sidebarEl) {
+    sidebarEl.classList.add("wiki-sidebar-visible");
+    console.log("[wiki] wiki-sidebar-visible added", sidebarEl.className);
+  }
+  if (toggleSidebarOpenBtn) toggleSidebarOpenBtn.classList.add("hidden");
+  const closeBtn = document.querySelector("#toggle-wiki-sidebar-close");
+  if (closeBtn) closeBtn.classList.remove("hidden");
+});
+
+const toggleSidebarCloseBtn = document.querySelector("#toggle-wiki-sidebar-close");
+toggleSidebarCloseBtn?.addEventListener("click", () => {
+  console.log("[wiki] toggle-wiki-sidebar-close clicked");
+  const sidebarEl = document.querySelector(".wiki-sidebar");
+  if (sidebarEl) {
+    sidebarEl.classList.remove("wiki-sidebar-visible");
+    console.log("[wiki] wiki-sidebar-visible removed", sidebarEl.className);
+  }
+  if (toggleSidebarCloseBtn) toggleSidebarCloseBtn.classList.add("hidden");
+  const openBtn = document.querySelector("#toggle-wiki-sidebar-open");
+  if (openBtn) openBtn.classList.remove("hidden");
+});
+
+// Hide wiki panel button (Chat mode)
+const hideWikiPanelChatBtn = document.querySelector("#hide-wiki-panel-chat");
+hideWikiPanelChatBtn?.addEventListener("click", () => {
+  console.log("[wiki] hide-wiki-panel-chat clicked");
+  window.WorkbenchUI?.hideWiki?.();
+});
 
 bootstrap();

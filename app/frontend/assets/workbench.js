@@ -3,6 +3,7 @@ const layoutWikiButtonEl = document.querySelector("#layout-mode-wiki");
 const layoutChatButtonEl = document.querySelector("#layout-mode-chat");
 const hideChatButtonEl = document.querySelector("#hide-chat-panel");
 const hideWikiButtonEl = document.querySelector("#hide-wiki-panel");
+const hideWikiPanelChatButtonEl = document.querySelector("#hide-wiki-panel-chat");
 const showChatButtonEl = document.querySelector("#show-chat-panel");
 const showWikiButtonEl = document.querySelector("#show-wiki-panel");
 
@@ -65,6 +66,7 @@ function applyWorkbenchState() {
 
   hideChatButtonEl?.classList.toggle("hidden", workbenchState.layout !== "wiki");
   hideWikiButtonEl?.classList.toggle("hidden", workbenchState.layout !== "chat");
+  hideWikiPanelChatButtonEl?.classList.toggle("hidden", workbenchState.layout !== "chat");
 }
 
 function setLayout(layout) {
@@ -115,6 +117,7 @@ layoutWikiButtonEl?.addEventListener("click", () => setLayout("wiki"));
 layoutChatButtonEl?.addEventListener("click", () => setLayout("chat"));
 hideChatButtonEl?.addEventListener("click", hideChat);
 hideWikiButtonEl?.addEventListener("click", hideWiki);
+hideWikiPanelChatButtonEl?.addEventListener("click", hideWiki);
 showChatButtonEl?.addEventListener("click", showChat);
 showWikiButtonEl?.addEventListener("click", showWiki);
 

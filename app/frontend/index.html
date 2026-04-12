@@ -10,37 +10,32 @@
     <div class="site-shell app-shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">Research Knowledge Base Workbench</p>
-          <h1>Wiki 与 Chat 两种工作模式可以来回切换</h1>
+          <p class="eyebrow">Research Knowledge Base</p>
         </div>
-        <nav class="topnav">
-          <a class="active" href="/">Workbench</a>
-        </nav>
-      </header>
-
-      <section class="workbench-modebar">
         <div class="workspace-switch" role="tablist" aria-label="Workbench mode">
           <button id="layout-mode-wiki" class="workspace-switch-button active" type="button">
-            Wiki 模式
+            Wiki
           </button>
           <button id="layout-mode-chat" class="workspace-switch-button" type="button">
-            Chat 模式
+            Chat
           </button>
         </div>
-        <p class="helper-text">
-          主界面始终铺满工作区，另一侧内容会以右侧可隐藏浮窗的方式覆盖在主界面上。
-        </p>
-      </section>
+      </header>
 
       <main class="workbench-grid">
         <section class="workbench-wiki">
           <div class="panel wiki-sidebar">
-            <div class="source-switch" role="tablist" aria-label="Content source">
-              <button id="mode-wiki" class="source-switch-button active" type="button">
-                Wiki
-              </button>
-              <button id="mode-raw" class="source-switch-button" type="button">
-                Raw
+            <div class="wiki-sidebar-header">
+              <div class="source-switch" role="tablist" aria-label="Content source">
+                <button id="mode-wiki" class="source-switch-button active" type="button">
+                  Wiki
+                </button>
+                <button id="mode-raw" class="source-switch-button" type="button">
+                  Raw
+                </button>
+              </div>
+              <button id="toggle-wiki-sidebar-close" class="button button-secondary hidden" type="button">
+                收起目录
               </button>
             </div>
             <div class="search-block">
@@ -57,8 +52,11 @@
                 <h2 id="wiki-title">正在加载页面</h2>
               </div>
               <div class="detail-actions">
-                <button id="hide-wiki-panel" class="button button-secondary floating-control" type="button">
-                  隐藏 Wiki
+                <button id="toggle-wiki-sidebar-open" class="button button-secondary" type="button">
+                  目录
+                </button>
+                <button id="hide-wiki-panel-chat" class="button button-secondary floating-control" type="button">
+                  隐藏
                 </button>
                 <a
                   id="open-source-file"
@@ -70,47 +68,22 @@
                   打开原文件
                 </a>
                 <button id="quote-into-chat" class="button button-secondary" type="button">
-                  引用到提问框
+                  引用
                 </button>
               </div>
             </div>
-            <div id="wiki-summary" class="summary-box"></div>
             <article id="wiki-content" class="wiki-content"></article>
           </section>
         </section>
 
         <section class="panel chat-panel unified-chat-panel">
           <div class="chat-panel-header">
-            <div>
-              <p id="agent-runtime-label" class="eyebrow">Agent Runtime</p>
-              <h2>Agent 对话</h2>
-            </div>
             <div class="chat-panel-actions">
-              <p id="agent-runtime-helper" class="helper-text">当前会优先结合本地知识库来回答。</p>
               <button id="hide-chat-panel" class="button button-secondary floating-control" type="button">
                 隐藏 Chat
               </button>
             </div>
           </div>
-
-          <section class="chat-side-info">
-            <div>
-              <p class="eyebrow">Try Asking</p>
-              <div id="suggestions" class="chip-list"></div>
-            </div>
-            <div class="mini-card">
-              <p class="mini-label">当前后端行为</p>
-              <p id="agent-runtime-behavior">
-                <code>/api/chat/stream</code> 会流式返回文本增量、Pi 过程事件和最终结果。
-              </p>
-            </div>
-            <div class="mini-card">
-              <p class="mini-label">Pi 过程</p>
-              <p class="helper-text">
-                回复生成过程中，会实时追加 Pi 的事件过程、工具调用线索和 warning。
-              </p>
-            </div>
-          </section>
 
           <div id="messages" class="messages"></div>
           <form id="chat-form" class="chat-form">
@@ -121,7 +94,6 @@
               placeholder="问点什么，比如：这个方向有哪些值得做的 gap？"
             ></textarea>
             <div class="chat-actions">
-              <p class="helper-text">可以先在左边选中一个 wiki 页面，再把它带进问题里。</p>
               <button class="button button-primary" type="submit">发送</button>
             </div>
           </form>
