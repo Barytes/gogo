@@ -31,7 +31,8 @@ def get_agent_backend_status() -> dict[str, Any]:
 
 
 def _collect_context(message: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    wiki_hits = search_pages(message, limit=4)
+    # 优先检索个人知识库，不足时再检索 public-pool
+    wiki_hits = search_pages(message, limit=6)  # 个人知识库优先，给更多配额
     raw_hits = search_raw_files(message, limit=4)
     return wiki_hits, raw_hits
 

@@ -12,24 +12,116 @@ For knowledge-base content rules, consult the external knowledge-base repo, espe
 
 - `AGENTS.md` inside that knowledge-base repository
 
-## Architecture Sync Rule
+## Document Hierarchy
 
-Whenever a code change makes any part of `docs/mvp-architecture.md` inaccurate, update the affected part of `docs/mvp-architecture.md` in the same change.
+```
+product-definition-belief.md (North Star)
+    ↓
+client-architecture.md + server-architecture.md (Architecture Design)
+    ↓
+TASKS.md (Task List - describes gaps between code and architecture)
+    ↓
+Code Implementation
+```
 
-This includes, when relevant:
+### Document Responsibilities
 
-- frontend structure
-- backend routes
-- API behavior
-- page layout
-- runtime or dependency setup
-- data flow descriptions
-- current system boundaries
+| Document | Purpose | Update Trigger |
+|----------|---------|----------------|
+| `product-definition-belief.md` | Core value proposition and goals | Rarely; only when product vision changes |
+| `client-architecture.md` | Local client architecture design | When client architecture decisions change |
+| `server-architecture.md` | Server architecture design | When server architecture decisions change |
+| `agent-architecture.md` | Agent service architecture design | When Agent service implementation changes |
+| `TASKS.md` | Current code status + task list tracking gaps | Every code change; keep synced with code |
 
-Do not leave `docs/mvp-architecture.md` describing an older implementation after the code has changed.
+## Code-Architecture Sync Rules
 
-## Documentation Principle
+### Rule 1: Architecture is the Guide
 
-Keep `docs/mvp-architecture.md` aligned with the current implementation, not an outdated plan.
+Code should follow `client-architecture.md` and `server-architecture.md`. These documents describe the target architecture that the code should implement.
 
-If the implementation and the document diverge, the change is not complete until the document is corrected.
+### Rule 2: TASKS.md Tracks Gaps
+
+`TASKS.md` describes:
+- Current code implementation status
+- Gaps between code and architecture
+- Tasks needed to close those gaps
+
+**Whenever code is modified, update `TASKS.md`**:
+- Mark completed tasks as done (or remove them)
+- Update code status descriptions
+- Add new tasks if new gaps are introduced
+
+### Rule 3: Architecture Changes Trigger Task Cleanup
+
+Whenever `client-architecture.md` or `server-architecture.md` is modified:
+- Review `TASKS.md` and remove outdated tasks
+- Add new tasks for newly described features
+- Modify existing tasks if requirements changed
+- Keep `TASKS.md` aligned with current architecture
+
+### Rule 4: Never Let TASKS.md Stale
+
+If you implement a feature described in `TASKS.md`:
+- Complete the implementation in code
+- Immediately update `TASKS.md` to reflect the new status
+- Do not leave completed tasks in the list
+
+### Rule 5: Agent Architecture Sync
+
+`docs/agent-architecture.md` describes the Agent service implementation in detail.
+
+**Whenever `app/backend/agent_service.py` or `app/backend/pi_sdk_bridge.mjs` is modified:**
+- Update `docs/agent-architecture.md` to reflect the changes
+- Keep the "当前实现状态" section accurate
+- Update the "与架构的差距" table if gaps change
+- Update the "变更日志" at the end
+
+This document should be treated as a living specification that always matches the current code.
+
+## When Implementing Features
+
+1. **Read architecture first** — Understand the design in `client-architecture.md` or `server-architecture.md`
+2. **Check `TASKS.md`** — See if the task is already described
+3. **Implement the code**
+4. **Update `TASKS.md`** — Mark task as completed, update code status
+
+## When Architecture Changes
+
+1. **Modify the architecture document** (`client-architecture.md` or `server-architecture.md`)
+2. **Immediately update `TASKS.md`**:
+   - Remove tasks that are no longer relevant
+   - Add new tasks for new features
+   - Modify tasks if the implementation approach changed
+
+## File Structure
+
+```
+gogo-app/
+├── AGENTS.md                 # This file - contribution guidelines
+├── TASKS.md                  # Current code status + task list (KEEP SYNCED)
+├── README.md                 # Project overview
+├── docs/
+│   ├── product-definition-belief.md    # North Star
+│   ├── client-architecture.md          # Client design
+│   ├── server-architecture.md          # Server design
+│   └── agent-architecture.md           # Agent service design (KEEP SYNCED)
+├── app/
+│   ├── backend/
+│   │   ├── main.py           # FastAPI entry point
+│   │   ├── config.py         # Configuration
+│   │   ├── agent_service.py  # Agent chat service
+│   │   ├── pi_sdk_bridge.mjs # Pi SDK bridge
+│   │   ├── wiki_service.py   # Wiki knowledge service
+│   │   ├── raw_service.py    # Raw material service
+│   │   ├── write_service.py  # (TODO) Write-back service
+│   │   └── git_sync_service.py # (TODO) Git sync service
+│   └── frontend/
+│       ├── index.html
+│       └── assets/
+│           ├── chat.js
+│           ├── wiki.js
+│           ├── workbench.js
+│           └── sync.js       # (TODO) Sync UI
+└── ...
+```

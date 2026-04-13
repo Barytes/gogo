@@ -1,0 +1,258 @@
+# gogo-app 任务列表
+
+> 本文档描述当前代码实现状态，并维护一份任务列表追踪与 [client-architecture.md](docs/client-architecture.md) 和 [server-architecture.md](docs/server-architecture.md) 的差距。
+
+**最后更新**: 2026-04-13
+
+---
+
+## 代码现状
+
+### 已完成功能
+
+#### 后端 (FastAPI)
+
+| 模块 | 文件 | 状态 |
+|------|------|------|
+| 配置管理 | `app/backend/config.py` | ✅ 基础配置（KNOWLEDGE_BASE_DIR, PI 相关配置） |
+| 主入口 | `app/backend/main.py` | ✅ 页面路由、Wiki/Raw API、Chat API |
+| Wiki 服务 | `app/backend/wiki_service.py` | ✅ 列表、搜索、详情、树结构 |
+| Raw 服务 | `app/backend/raw_service.py` | ✅ 列表、搜索、详情、PDF 预览 |
+| Agent 服务 | `app/backend/agent_service.py` | ✅ Pi SDK 桥接、流式聊天 |
+| Pi SDK Bridge | `app/backend/pi_sdk_bridge.mjs` | ✅ Node.js 桥接 |
+
+**相关架构文档**: [docs/agent-architecture.md](docs/agent-architecture.md)
+
+#### 前端
+
+| 模块 | 文件 | 状态 |
+|------|------|------|
+| 主页面 | `app/frontend/index.html` | ✅ 单页工作台布局 |
+| 工作台控制 | `app/frontend/assets/workbench.js` | ✅ Wiki/Chat 模式切换、浮窗控制 |
+| Wiki 浏览 | `app/frontend/assets/wiki.js` | ✅ 列表、搜索、详情、Markdown 渲染 |
+| Chat | `app/frontend/assets/chat.js` | ✅ 流式消费、工作日志显示 |
+| 样式 | `app/frontend/assets/styles.css` | ✅ 基础样式 |
+
+#### API 路由
+
+| 路由 | 状态 |
+|------|------|
+| `GET /` | ✅ 工作台首页 |
+| `GET /chat` | ✅ Chat 模式 |
+| `GET /wiki` | ✅ Wiki 模式 |
+| `GET /api/health` | ✅ 健康检查 |
+| `GET /api/chat/suggestions` | ✅ 建议问题 |
+| `POST /api/chat` | ✅ 非流式聊天 |
+| `POST /api/chat/stream` | ✅ 流式聊天 |
+| `GET /api/wiki/pages` | ✅ Wiki 列表 |
+| `GET /api/wiki/tree` | ✅ Wiki 树 |
+| `GET /api/wiki/page` | ✅ Wiki 详情 |
+| `GET /api/wiki/search` | ✅ Wiki 搜索 |
+| `GET /api/raw/files` | ✅ Raw 列表 |
+| `GET /api/raw/file` | ✅ Raw 详情 |
+| `GET /api/raw/search` | ✅ Raw 搜索 |
+| `GET /raw/file` | ✅ Raw 下载 |
+
+---
+
+## 任务列表
+
+### 文档层级关系
+
+```
+product-definition-belief.md (核心目标和价值)
+    ↓
+client-architecture.md + server-architecture.md (架构设计)
+    ↓
+TASKS.md (任务列表 - 描述代码与架构的差距)
+    ↓
+代码实现
+```
+
+### 未完成功能
+
+#### 0. 检查并优化 Agent 服务
+
+对 `app/backend/agent_service.py` 和 `pi_sdk_bridge.mjs` 进行全面优化。
+
+- [ ] **0.1 优化 Pi Agent System Prompt**
+  - [ ] 指引 Agent 阅读知识库的 `AGENTS.md`
+  - [ ] 设定人格和回答风格（精简、直接）
+  - [ ] 移除冗余的系统提示词
+
+- [ ] **0.2 移除固定页面检索逻辑**
+  - [ ] 移除 `_collect_context()` 中的固定检索调用
+  - [ ] 由 Agent 按照 `schemas/query.md` 自行决定检索策略
+  - [ ] 更新 `pi_sdk_bridge.mjs` 支持 Agent 自主工具调用
+
+- [ ] **0.3 添加写回功能**
+  - [ ] 创建 `app/backend/write_service.py`
+  - [ ] 实现 `create_wiki_page()` 和 `create_insight_page()` 函数
+  - [ ] 遵循 `schemas/ingest.md` 和 `schemas/insight.md` 格式
+  - [ ] 自动维护 frontmatter（作者、时间、来源）
+  - [ ] 追加日志到 `wiki/log.md`
+  - [ ] 新增 `POST /api/write/wiki` 和 `POST /api/write/insight` 路由
+
+- [ ] **0.4 设计 Tool 系统**（Skill 系统的基础）
+  - [ ] 定义 Tool 接口规范（输入、输出、错误处理）
+  - [ ] 实现基础 Tool 注册机制
+  - [ ] 实现文件读取 Tool（已存在，需封装）
+  - [ ] 实现文件写入 Tool（配合写回功能）
+  - [ ] 实现搜索 Tool（封装 wiki/raw search）
+  - [ ] 支持用户扩展自定义 Tool
+  - [ ] 更新 `pi_sdk_bridge.mjs` 支持 Tool 发现和调用
+
+- [ ] **0.5 设计 Skill 系统**（在 Tool 之上编排任务流程）
+  - [ ] 定义 Skill 接口规范
+  - [ ] 实现 `ingest` Skill（材料摄取）— 编排 read/classify/write Tool
+  - [ ] 实现 `query` Skill（本地查询）— 编排 search/read/answer Tool
+  - [ ] 实现 `lint` Skill（清理检查）— 编排 scan/report Tool
+  - [ ] 支持用户扩展自定义 Skill
+  - [ ] 更新 `pi_sdk_bridge.mjs` 支持 Skill 调用
+
+- [ ] **0.6 支持 Model Provider 配置**
+  - [ ] 新增 `MODEL_PROVIDER` 配置（支持不同 LLM Provider）
+  - [ ] 新增 `MODEL_NAME` 配置（支持模型切换）
+  - [ ] 保留 `PI_THINKING_LEVEL` 配置
+  - [ ] 更新 `config.py` 支持新配置项
+  - [ ] 更新 `pi_sdk_bridge.mjs` 支持动态模型配置
+
+---
+
+#### 1. 双层知识库支持
+
+当前代码使用单层 `KNOWLEDGE_BASE_DIR`，需要支持 `personal-wiki/` + `public-pool/` 双层结构。
+
+- [ ] **1.1 配置扩展**
+  - [ ] 新增 `PERSONAL_WIKI_DIR` 环境变量
+  - [ ] 新增 `PUBLIC_POOL_DIR` 配置
+  - [ ] 新增 `PUBLIC_POOL_REMOTE` 和 `PENDING_POOL_REMOTE` 配置
+  - [ ] 新增用户身份配置 `USER_ID` 和 `USER_NAME`
+  - [ ] 新增 Sync 策略配置 (`AUTO_SYNC_ENABLED`, `SYNC_FREQUENCY` 等)
+
+- [ ] **1.2 Wiki 服务改造**
+  - [ ] `wiki_service.py` 支持双层检索（个人 wiki 优先）
+  - [ ] 检索结果标注来源（public vs personal）
+  - [ ] `search_pages()` 支持多源合并和优先级排序
+
+- [ ] **1.3 Agent 服务改造**
+  - [ ] `_collect_context()` 实现双层检索逻辑
+  - [ ] `_build_pi_system_prompt()` 增加来源优先级指导
+
+#### 2. 知识写回功能
+
+当前代码明确标注"read-only"，不支持写回。
+
+- [ ] **2.1 Write Service**
+  - [ ] 创建 `app/backend/write_service.py`
+  - [ ] 实现 `create_wiki_page()` 函数
+  - [ ] 实现 `create_insight_page()` 函数
+  - [ ] 实现 `update_page_with_links()` 函数
+  - [ ] 遵循 `schemas/ingest.md` 和 `schemas/insight.md` 格式
+  - [ ] 自动维护 frontmatter（作者、时间、来源）
+  - [ ] 追加日志到 `wiki/log.md`
+
+- [ ] **2.2 Write API**
+  - [ ] 新增 `POST /api/write/wiki` 路由
+  - [ ] 新增 `POST /api/write/insight` 路由
+  - [ ] 请求体包含页面内容、作者、来源等元数据
+
+- [ ] **2.3 写回 UI**
+  - [ ] Chat 消息增加"保存到知识库"按钮
+  - [ ] 写回表单（选择路径、类型、标签）
+  - [ ] 写回确认和反馈
+
+#### 3. Git 同步功能
+
+当前代码没有 Git 操作能力。
+
+- [ ] **3.1 Git Sync Service**
+  - [ ] 创建 `app/backend/git_sync_service.py`
+  - [ ] 实现 `get_sync_status()` 函数
+  - [ ] 实现 `pull_public_pool()` 函数
+  - [ ] 实现 `push_to_pending_pool()` 函数
+  - [ ] 实现 `get_contribution_queue()` 函数
+  - [ ] 实现 `mark_for_contribution()` 函数
+  - [ ] 管理 public-pool git submodule
+
+- [ ] **3.2 Sync API**
+  - [ ] 新增 `GET /api/sync/status` 路由
+  - [ ] 新增 `POST /api/sync/pull` 路由
+  - [ ] 新增 `POST /api/sync/push` 路由
+  - [ ] 新增 `GET /api/sync/contributions` 路由
+
+- [ ] **3.3 Sync UI**
+  - [ ] 创建 `app/frontend/assets/sync.js`
+  - [ ] Sync 状态栏（最后同步时间、待 push 数量）
+  - [ ] 一键 sync 按钮
+  - [ ] 贡献队列面板
+  - [ ] 页面来源标注（public vs personal）
+
+- [ ] **3.4 配置 UI**
+  - [ ] 新增 `GET /api/config` 路由
+  - [ ] 新增 `PUT /api/config` 路由
+  - [ ] 配置编辑界面
+
+#### 4. 贡献标记功能
+
+- [ ] **4.1 贡献标记逻辑**
+  - [ ] `agent_service.py` 实现 `should_suggest_contribution()`
+  - [ ] `agent_service.py` 实现 `mark_for_contribution()`
+  - [ ] 写回时自动/手动标记为可贡献
+
+- [ ] **4.2 贡献队列 UI**
+  - [ ] 列出待贡献页面
+  - [ ] 选择要 push 的页面
+  - [ ] 显示 push 历史
+
+#### 5. 服务器端聚合脚本（独立仓库）
+
+服务器端功能在单独的仓库中实现。
+
+- [ ] **5.1 聚合主脚本**
+  - [ ] 创建 `scripts/aggregate.py`
+  - [ ] 实现 `scan_incoming()` 函数
+  - [ ] 实现 `extract_metadata()` 函数
+  - [ ] 实现 `find_similar_pages()` 函数（语义相似度）
+  - [ ] 实现 `add_cross_links()` 函数
+  - [ ] 实现 `process_aggregation()` 主流程
+
+- [ ] **5.2 冲突检测脚本**
+  - [ ] 创建 `scripts/tension_detector.py`
+  - [ ] 实现 `extract_judgments()` 函数
+  - [ ] 实现 `detect_contradiction()` 函数
+  - [ ] 实现 `create_tension_page()` 函数
+
+- [ ] **5.3 Index 生成脚本**
+  - [ ] 创建 `scripts/index_generator.py`
+  - [ ] 实现 `scan_all_pages()` 函数
+  - [ ] 实现 `group_by_topic()` 函数
+  - [ ] 实现 `generate_index_md()` 函数
+
+- [ ] **5.4 聚合调度**
+  - [ ] 创建 `aggregate.sh` 入口脚本
+  - [ ] 配置 cron job（每周执行）
+  - [ ] 日志输出到文件
+
+---
+
+## 任务优先级
+
+| 优先级 | 功能 | 说明 |
+|--------|------|------|
+| P0 | 0. 检查并优化 Agent 服务 | Agent 是核心引擎，优先优化 |
+| P0 | 双层知识库支持 | 联邦架构的基础 |
+| P0 | 知识写回功能 | 核心价值"沉淀复利"的关键 |
+| P1 | Git 同步功能 | 联邦架构的同步机制 |
+| P1 | 贡献标记功能 | 降低贡献摩擦 |
+| P2 | 服务器端聚合 | 可手动执行，自动化可延后 |
+
+---
+
+## 变更日志
+
+| 日期 | 变更 | 影响的任务 |
+|------|------|-----------|
+| 2026-04-13 | 初始版本 | - |
+| 2026-04-13 | 修改检索优先级为个人知识库优先 | 更新 1.2、1.3 任务描述 |
+| 2026-04-13 | 新增任务 0：检查并优化 Agent 服务 | 新增 0.1-0.6 子任务 |
