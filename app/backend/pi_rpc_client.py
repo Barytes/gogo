@@ -5,8 +5,6 @@ import json
 import logging
 import time
 import uuid
-from collections import deque
-from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
 
@@ -17,20 +15,15 @@ class PiRpcError(RuntimeError):
     """Raised when RPC command fails or transport breaks."""
 
 
-@dataclass
-class PiRpcResponse:
-    data: dict[str, Any]
-    pending_events: list[dict[str, Any]]
-
-
 class PiRpcClient:
     """
     Minimal async RPC client for `pi --mode rpc`.
 
     Notes:
     - Uses strict LF (`\\n`) framing (see docs/pi/rpc.md).
-    - Supports command/response correlation with `id`.
-    - This client is intentionally single-flight for F1.
+    - Uses a single background reader task for stdout.
+    - Command responses are dispatched by `id`; stream events go through a queue.
+    - Only one prompt stream should be active at a time.
     """
 
     def __init__(
@@ -47,6 +40,14 @@ class PiRpcClient:
         self.extra_args = list(extra_args or [])
         self._process: asyncio.subprocess.Process | None = None
         self._stdout_buffer = bytearray()
+        self._reader_task: asyncio.Task[None] | None = None
+        self._reader_error: Exception | None = None
+        self._response_waiters: dict[str, asyncio.Future[dict[str, Any]]] = {}
+        self._event_queue: asyncio.Queue[Any] = asyncio.Queue()
+        self._write_lock = asyncio.Lock()
+        self._prompt_lock = asyncio.Lock()
+        self._stream_closed_sentinel = object()
+        self._closing = False
 
     async def __aenter__(self) -> PiRpcClient:
         await self.start()
@@ -58,6 +59,11 @@ class PiRpcClient:
     async def start(self) -> None:
         if self._process and self._process.returncode is None:
             return
+        self._stdout_buffer.clear()
+        self._reader_error = None
+        self._response_waiters.clear()
+        self._event_queue = asyncio.Queue()
+        self._closing = False
         command = [self.command_path, "--mode", "rpc", *self.extra_args]
         logger.info("Starting Pi RPC process: %s (cwd=%s)", command, self.cwd)
         self._process = await asyncio.create_subprocess_exec(
@@ -67,11 +73,15 @@ class PiRpcClient:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
+        self._reader_task = asyncio.create_task(self._reader_loop(), name="pi-rpc-reader")
 
     async def close(self) -> None:
         process = self._process
-        self._process = None
+        reader_task = self._reader_task
+        self._closing = True
         if not process:
+            self._reader_task = None
+            self._process = None
             return
 
         if process.returncode is None:
@@ -82,13 +92,28 @@ class PiRpcClient:
                 process.kill()
                 await process.wait()
 
+        if reader_task is not None:
+            try:
+                await asyncio.wait_for(reader_task, timeout=1)
+            except asyncio.TimeoutError:
+                reader_task.cancel()
+                await asyncio.gather(reader_task, return_exceptions=True)
+            except Exception:
+                logger.debug("Pi RPC reader loop exited during close", exc_info=True)
+
+        self._reader_task = None
+        self._process = None
+        close_error = PiRpcError("Pi RPC client closed.")
+        self._fail_pending_waiters(close_error)
+        self._signal_stream_closed()
+
     async def get_state(self, *, request_id: str | None = None) -> dict[str, Any]:
         response = await self._send_command_and_wait_response(
             command_type="get_state",
             payload={},
             request_id=request_id,
         )
-        return response.data.get("data") if isinstance(response.data.get("data"), dict) else {}
+        return response.get("data") if isinstance(response.get("data"), dict) else {}
 
     async def get_messages(self, *, request_id: str | None = None) -> list[dict[str, Any]]:
         response = await self._send_command_and_wait_response(
@@ -96,7 +121,7 @@ class PiRpcClient:
             payload={},
             request_id=request_id,
         )
-        data = response.data.get("data")
+        data = response.get("data")
         if not isinstance(data, dict):
             return []
         messages = data.get("messages")
@@ -105,10 +130,6 @@ class PiRpcClient:
         return [item for item in messages if isinstance(item, dict)]
 
     async def abort(self, *, request_id: str | None = None) -> bool:
-        # Abort is intentionally fire-and-forget. When a prompt stream is already
-        # reading stdout, waiting for a dedicated abort response would race on the
-        # same StreamReader and can raise:
-        # `read() called while another coroutine is already waiting for incoming data`.
         command_id = (request_id or str(uuid.uuid4())).strip()
         await self._write_command({"id": command_id, "type": "abort"})
         logger.info("Pi RPC abort sent: id=%s", command_id)
@@ -128,7 +149,7 @@ class PiRpcClient:
             payload=payload,
             request_id=request_id,
         )
-        data = response.data.get("data")
+        data = response.get("data")
         return data if isinstance(data, dict) else {}
 
     async def switch_session(
@@ -142,7 +163,7 @@ class PiRpcClient:
             payload={"sessionPath": session_path},
             request_id=request_id,
         )
-        data = response.data.get("data")
+        data = response.get("data")
         return data if isinstance(data, dict) else {}
 
     async def set_session_name(
@@ -156,7 +177,7 @@ class PiRpcClient:
             payload={"name": name},
             request_id=request_id,
         )
-        return bool(response.data.get("success"))
+        return bool(response.get("success"))
 
     async def set_thinking_level(
         self,
@@ -169,7 +190,7 @@ class PiRpcClient:
             payload={"level": level},
             request_id=request_id,
         )
-        return bool(response.data.get("success"))
+        return bool(response.get("success"))
 
     async def prompt_events(
         self,
@@ -178,27 +199,29 @@ class PiRpcClient:
         request_id: str | None = None,
         images: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
+        if self._prompt_lock.locked():
+            raise PiRpcError("Pi RPC prompt stream is already active.")
+
+        await self._prompt_lock.acquire()
         payload: dict[str, Any] = {"message": message}
         if images:
             payload["images"] = images
 
-        response = await self._send_command_and_wait_response(
-            command_type="prompt",
-            payload=payload,
-            request_id=request_id,
-        )
-        for event in response.pending_events:
-            yield event
+        try:
+            await self._send_command_and_wait_response(
+                command_type="prompt",
+                payload=payload,
+                request_id=request_id,
+            )
 
-        while True:
-            record = await self._read_record(self.timeout_seconds)
-            record_type = str(record.get("type") or "")
-            if record_type == "response":
-                # Ignore unrelated responses in single-flight mode.
-                continue
-            yield record
-            if record_type == "agent_end":
-                break
+            while True:
+                record = await self._next_event()
+                record_type = str(record.get("type") or "")
+                yield record
+                if record_type == "agent_end":
+                    break
+        finally:
+            self._prompt_lock.release()
 
     async def _send_command_and_wait_response(
         self,
@@ -206,51 +229,93 @@ class PiRpcClient:
         command_type: str,
         payload: dict[str, Any],
         request_id: str | None,
-    ) -> PiRpcResponse:
-        if not self._process or self._process.returncode is not None:
-            raise PiRpcError("Pi RPC process is not running.")
-
+    ) -> dict[str, Any]:
+        self._ensure_running()
         command_id = (request_id or str(uuid.uuid4())).strip()
+        if command_id in self._response_waiters:
+            raise PiRpcError(f"Duplicate Pi RPC command id: {command_id}")
+
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future[dict[str, Any]] = loop.create_future()
+        self._response_waiters[command_id] = future
         command = {"id": command_id, "type": command_type, **payload}
-        await self._write_command(command)
-
         started_at = time.monotonic()
-        pending: deque[dict[str, Any]] = deque()
-        while True:
-            record = await self._read_record(self.timeout_seconds)
-            if str(record.get("type") or "") != "response":
-                pending.append(record)
-                continue
-            if str(record.get("id") or "") != command_id:
-                pending.append(record)
-                continue
-
-            elapsed_ms = int((time.monotonic() - started_at) * 1000)
-            logger.info(
-                "Pi RPC response: command=%s id=%s success=%s elapsed_ms=%s",
-                command_type,
-                command_id,
-                bool(record.get("success")),
-                elapsed_ms,
+        try:
+            await self._write_command(command)
+            record = await self._wait_with_timeout(
+                future,
+                label=f"waiting for `{command_type}` response",
             )
+        finally:
+            self._response_waiters.pop(command_id, None)
+            if not future.done():
+                future.cancel()
 
-            if not bool(record.get("success")):
-                error_text = str(record.get("error") or "unknown RPC error")
-                raise PiRpcError(f"RPC command `{command_type}` failed: {error_text}")
-            return PiRpcResponse(data=record, pending_events=list(pending))
+        elapsed_ms = int((time.monotonic() - started_at) * 1000)
+        logger.info(
+            "Pi RPC response: command=%s id=%s success=%s elapsed_ms=%s",
+            command_type,
+            command_id,
+            bool(record.get("success")),
+            elapsed_ms,
+        )
+
+        if not bool(record.get("success")):
+            error_text = str(record.get("error") or "unknown RPC error")
+            raise PiRpcError(f"RPC command `{command_type}` failed: {error_text}")
+        return record
 
     async def _write_command(self, command: dict[str, Any]) -> None:
-        if not self._process or self._process.stdin is None:
+        self._ensure_running()
+        process = self._process
+        if process is None or process.stdin is None:
             raise PiRpcError("Pi RPC stdin is unavailable.")
         raw = json.dumps(command, ensure_ascii=False).encode("utf-8") + b"\n"
-        self._process.stdin.write(raw)
-        await self._process.stdin.drain()
+        async with self._write_lock:
+            process.stdin.write(raw)
+            await process.stdin.drain()
 
-    async def _read_record(self, timeout_seconds: int | None) -> dict[str, Any]:
+    async def _reader_loop(self) -> None:
+        reader_error: Exception | None = None
+        try:
+            while True:
+                record = await self._read_record()
+                if record is None:
+                    if self._closing:
+                        return
+                    raise PiRpcError("Pi RPC stdout closed unexpectedly.")
+
+                if str(record.get("type") or "") == "response":
+                    response_id = str(record.get("id") or "")
+                    waiter = self._response_waiters.get(response_id)
+                    if waiter is None or waiter.done():
+                        logger.debug(
+                            "Ignoring unmatched Pi RPC response: id=%s success=%s",
+                            response_id,
+                            bool(record.get("success")),
+                        )
+                        continue
+                    waiter.set_result(record)
+                    continue
+
+                await self._event_queue.put(record)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            reader_error = exc
+            if not self._closing:
+                logger.warning("Pi RPC reader loop stopped", exc_info=True)
+        finally:
+            if reader_error is not None:
+                self._reader_error = reader_error
+                self._fail_pending_waiters(reader_error)
+            self._signal_stream_closed()
+
+    async def _read_record(self) -> dict[str, Any] | None:
         while True:
-            line = await self._read_line(timeout_seconds)
+            line = await self._read_line()
             if line is None:
-                raise PiRpcError("Pi RPC stdout closed unexpectedly.")
+                return None
             stripped = line.strip()
             if not stripped:
                 continue
@@ -262,8 +327,9 @@ class PiRpcClient:
             if isinstance(parsed, dict):
                 return parsed
 
-    async def _read_line(self, timeout_seconds: int | None) -> str | None:
-        if not self._process or self._process.stdout is None:
+    async def _read_line(self) -> str | None:
+        process = self._process
+        if process is None or process.stdout is None:
             return None
 
         while True:
@@ -275,19 +341,7 @@ class PiRpcClient:
                     line = line[:-1]
                 return line.decode("utf-8", errors="replace")
 
-            try:
-                if timeout_seconds is None:
-                    chunk = await self._process.stdout.read(4096)
-                else:
-                    chunk = await asyncio.wait_for(
-                        self._process.stdout.read(4096),
-                        timeout=timeout_seconds,
-                    )
-            except asyncio.TimeoutError as exc:
-                raise asyncio.TimeoutError(
-                    f"Pi RPC read timeout after {timeout_seconds}s"
-                ) from exc
-
+            chunk = await process.stdout.read(4096)
             if not chunk:
                 if self._stdout_buffer:
                     line = bytes(self._stdout_buffer)
@@ -298,3 +352,42 @@ class PiRpcClient:
                 return None
 
             self._stdout_buffer.extend(chunk)
+
+    async def _next_event(self) -> dict[str, Any]:
+        item = await self._wait_with_timeout(
+            self._event_queue.get(),
+            label="waiting for Pi RPC event",
+        )
+        if item is self._stream_closed_sentinel:
+            if self._reader_error is not None:
+                raise self._reader_error
+            raise PiRpcError("Pi RPC event stream closed unexpectedly.")
+        if not isinstance(item, dict):
+            raise PiRpcError("Pi RPC delivered an invalid event payload.")
+        return item
+
+    async def _wait_with_timeout(self, awaitable, *, label: str):
+        if self.timeout_seconds is None:
+            return await awaitable
+        try:
+            return await asyncio.wait_for(awaitable, timeout=self.timeout_seconds)
+        except asyncio.TimeoutError as exc:
+            raise asyncio.TimeoutError(
+                f"Pi RPC {label} timed out after {self.timeout_seconds}s"
+            ) from exc
+
+    def _ensure_running(self) -> None:
+        if self._reader_error is not None:
+            raise self._reader_error
+        if not self._process or self._process.returncode is not None:
+            raise PiRpcError("Pi RPC process is not running.")
+
+    def _fail_pending_waiters(self, exc: Exception) -> None:
+        waiters = list(self._response_waiters.values())
+        self._response_waiters.clear()
+        for waiter in waiters:
+            if not waiter.done():
+                waiter.set_exception(exc)
+
+    def _signal_stream_closed(self) -> None:
+        self._event_queue.put_nowait(self._stream_closed_sentinel)

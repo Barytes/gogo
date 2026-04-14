@@ -510,11 +510,15 @@ class SessionPool:
 
         if rpc_client is not None and active_loop is not None and active_loop.is_running():
             def schedule_abort() -> None:
-                asyncio.create_task(
-                    rpc_client.abort(
-                        request_id=f"{request_id}:user_abort" if request_id else None
-                    )
-                )
+                async def run_abort() -> None:
+                    try:
+                        await rpc_client.abort(
+                            request_id=f"{request_id}:user_abort" if request_id else None
+                        )
+                    except Exception:
+                        logger.warning("Failed to send user abort to Pi RPC", exc_info=True)
+
+                asyncio.create_task(run_abort())
 
             active_loop.call_soon_threadsafe(schedule_abort)
 

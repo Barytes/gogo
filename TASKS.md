@@ -79,17 +79,31 @@
 ### 2. 应用体验
 
 - [ ] 继续优化 Chat / Wiki 工作台体验
-- [ ] 排查长回复可能被提前中断的问题
-  - [ ] 确认问题发生在 Pi RPC 流、前端流消费，还是 session/abort 并发链路
-  - [ ] 复现“明显未输出完就终止”的场景并记录触发条件
-  - [ ] 明确是后端过早返回 `final/error`，还是前端提前停止渲染
-- [ ] 排查回复过程中 `PiRpcClient.abort()` 的并发读冲突
-  - [ ] 复现报错：`RuntimeError: read() called while another coroutine is already waiting for incoming data`
-  - [ ] 评估 `abort()` 与 `prompt_events()` 共享同一 `StreamReader` 的并发读问题
-  - [ ] 评估修复方向：单读协程分发、命令串行化，或专门的 abort 处理机制
-  - [ ] 结合实际工具调用重放一次长回复 + 用户终止场景，确认问题是否与高频工具调用有关
+- [x] 排查长回复可能被提前中断的问题
+  - [x] 确认问题发生在 Pi RPC 流、前端流消费，还是 session/abort 并发链路
+  - [x] 复现“明显未输出完就终止”的场景并记录触发条件
+  - [x] 明确是后端过早返回 `final/error`，还是前端提前停止渲染
+  - 结论：问题主要出在后端 Pi RPC 流的正文聚合与 session/abort 并发链路；当前已补充正文快照兜底，并在实际问答回归中暂未再复现提前截断。
+- [x] 排查回复过程中 `PiRpcClient.abort()` 的并发读冲突
+  - [x] 复现报错：`RuntimeError: read() called while another coroutine is already waiting for incoming data`
+  - [x] 评估 `abort()` 与 `prompt_events()` 共享同一 `StreamReader` 的并发读问题
+  - [x] 评估修复方向：单读协程分发、命令串行化，或专门的 abort 处理机制
+  - [x] 结合实际工具调用重放一次长回复 + 用户终止场景，确认问题是否与高频工具调用有关
+  - 结论：`PiRpcClient` 已重构为“单 reader task + response future 分发 + event queue”结构，`stdout` 不再被多个协程直接读取；用户终止按钮触发的后台 `abort()` 任务也已补上异常回收，当前实测未再出现并发读报错。
 - [x] 完善会话列表与历史恢复体验
 - [ ] 评估是否需要增加 knowledge-base 来源与当前连接状态展示
+- [ ] 支持在前端切换 Pi 模型
+  - [ ] 明确模型列表来源与后端配置方式
+  - [ ] 设计模型切换的前端入口与当前模型显示
+  - [ ] 打通 session / legacy 路径中的模型参数传递
+- [ ] 支持在前端切换 Pi 思考水平
+  - [ ] 复用或扩展现有 `thinking level` 后端能力
+  - [ ] 设计 chat 工作台中的切换入口与状态持久化
+  - [ ] 明确切换范围：当前会话、当前请求，还是全局默认
+- [ ] 支持上传文件并 ingest 到知识库
+  - [ ] 明确上传入口、文件类型与大小限制
+  - [ ] 设计上传后 ingest 的后端流程与状态反馈
+  - [ ] 明确 ingest 后如何在 Wiki / Chat 中可见与可追踪
 - [x] 会话管理行为对齐 ChatGPT 网页体验
   - [x] 引入“草稿聊天态（无 session）”与“持久会话态（有 session_id）”双态模型
   - [x] 页面初始化不自动创建会话；仅加载会话列表并恢复最近活跃会话（若存在）
