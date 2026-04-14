@@ -38,12 +38,12 @@ class PiRpcClient:
         *,
         command_path: str,
         cwd: str,
-        timeout_seconds: int,
+        timeout_seconds: int | None,
         extra_args: list[str] | None = None,
     ):
         self.command_path = command_path
         self.cwd = cwd
-        self.timeout_seconds = max(10, int(timeout_seconds))
+        self.timeout_seconds = max(10, int(timeout_seconds)) if timeout_seconds is not None else None
         self.extra_args = list(extra_args or [])
         self._process: asyncio.subprocess.Process | None = None
         self._stdout_buffer = bytearray()
@@ -244,7 +244,7 @@ class PiRpcClient:
         self._process.stdin.write(raw)
         await self._process.stdin.drain()
 
-    async def _read_record(self, timeout_seconds: int) -> dict[str, Any]:
+    async def _read_record(self, timeout_seconds: int | None) -> dict[str, Any]:
         while True:
             line = await self._read_line(timeout_seconds)
             if line is None:
@@ -260,7 +260,7 @@ class PiRpcClient:
             if isinstance(parsed, dict):
                 return parsed
 
-    async def _read_line(self, timeout_seconds: int) -> str | None:
+    async def _read_line(self, timeout_seconds: int | None) -> str | None:
         if not self._process or self._process.stdout is None:
             return None
 
@@ -274,10 +274,13 @@ class PiRpcClient:
                 return line.decode("utf-8", errors="replace")
 
             try:
-                chunk = await asyncio.wait_for(
-                    self._process.stdout.read(4096),
-                    timeout=timeout_seconds,
-                )
+                if timeout_seconds is None:
+                    chunk = await self._process.stdout.read(4096)
+                else:
+                    chunk = await asyncio.wait_for(
+                        self._process.stdout.read(4096),
+                        timeout=timeout_seconds,
+                    )
             except asyncio.TimeoutError as exc:
                 raise asyncio.TimeoutError(
                     f"Pi RPC read timeout after {timeout_seconds}s"

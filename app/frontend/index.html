@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Research KB MVP</title>
-    <link rel="stylesheet" href="/assets/styles.css" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260414-8" />
   </head>
   <body>
     <div class="site-shell app-shell">
@@ -77,36 +77,66 @@
         </section>
 
         <section class="panel chat-panel unified-chat-panel">
-          <div class="chat-panel-header">
-            <div class="chat-panel-actions">
-              <button id="hide-chat-panel" class="button button-secondary floating-control" type="button">
-                隐藏 Chat
-              </button>
-              <button id="new-session-button" class="button button-primary" type="button">
-                新建会话
-              </button>
-            </div>
-            <div class="session-selector-block">
-              <label for="session-selector">会话</label>
-              <select id="session-selector" class="session-selector"></select>
-              <button id="delete-session-button" class="button button-secondary" type="button" title="删除当前会话">
-                删除
-              </button>
+          <div class="chat-body">
+            <aside id="session-sidebar" class="session-sidebar" aria-label="会话侧边栏">
+              <div class="session-sidebar-top">
+                <button
+                  id="toggle-session-sidebar"
+                  class="session-sidebar-toggle"
+                  type="button"
+                  aria-expanded="true"
+                  aria-label="切换会话侧栏"
+                >
+                  <span class="session-sidebar-toggle-bar"></span>
+                </button>
+              </div>
+
+              <div class="session-sidebar-actions">
+                <button id="new-session-button" class="session-primary-action" type="button">
+                  新聊天
+                </button>
+              </div>
+
+              <div class="session-list-block">
+                <ul id="session-list" class="session-list" aria-label="会话列表"></ul>
+                <p id="session-list-empty" class="session-list-empty">暂无历史会话</p>
+              </div>
+            </aside>
+
+            <div class="chat-main">
+              <div class="chat-panel-header">
+                <div class="chat-panel-actions">
+                  <button
+                    id="toggle-session-sidebar-main"
+                    class="session-sidebar-toggle chat-main-sidebar-toggle"
+                    type="button"
+                    aria-expanded="false"
+                    aria-label="切换会话侧栏"
+                  >
+                    <span class="session-sidebar-toggle-bar"></span>
+                  </button>
+                  <button id="hide-chat-panel" class="button button-secondary floating-control" type="button">
+                    隐藏
+                  </button>
+                </div>
+              </div>
+
+              <div id="messages" class="messages"></div>
+              <form id="chat-form" class="chat-form">
+                <div class="chat-input-shell">
+                  <textarea
+                    id="chat-input"
+                    name="message"
+                    rows="3"
+                    placeholder="问点什么，比如：这个方向有哪些值得做的 gap？"
+                  ></textarea>
+                  <button class="chat-submit-button" type="submit" aria-label="发送">
+                    <span class="chat-submit-icon" aria-hidden="true">↑</span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-
-          <div id="messages" class="messages"></div>
-          <form id="chat-form" class="chat-form">
-            <textarea
-              id="chat-input"
-              name="message"
-              rows="3"
-              placeholder="问点什么，比如：这个方向有哪些值得做的 gap？"
-            ></textarea>
-            <div class="chat-actions">
-              <button class="button button-primary" type="submit">发送</button>
-            </div>
-          </form>
         </section>
       </main>
 
@@ -120,8 +150,8 @@
       </div>
     </div>
 
-    <script src="/assets/workbench.js"></script>
-    <script src="/assets/wiki.js"></script>
-    <script src="/assets/chat.js"></script>
+    <script src="/assets/workbench.js?v=20260414-11"></script>
+    <script src="/assets/wiki.js?v=20260414-11"></script>
+    <script src="/assets/chat.js?v=20260414-11"></script>
   </body>
 </html>

@@ -210,21 +210,91 @@ def _extract_assistant_text_from_messages(messages: Any) -> str:
     return latest_text
 
 
+def _normalize_tool_action(tool_name: str) -> str:
+    normalized = tool_name.strip().lower()
+    aliases = {
+        "grep": "search",
+        "glob": "search",
+        "rg": "search",
+        "ls": "explore",
+        "list": "explore",
+    }
+    return aliases.get(normalized, normalized or "tool")
+
+
+def _short_trace_text(value: Any, max_length: int = 180) -> str:
+    normalized = " ".join(str(value or "").split())
+    if len(normalized) <= max_length:
+        return normalized
+    return f"{normalized[: max_length - 1].rstrip()}…"
+
+
+def _trace_path_from_args(args: dict[str, Any]) -> str:
+    for key in ("path", "filePath", "cwd", "dir", "directory"):
+        value = args.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def _trace_search_query_from_args(args: dict[str, Any]) -> str:
+    for key in ("pattern", "query", "search", "text", "needle"):
+        value = args.get(key)
+        if isinstance(value, str) and value.strip():
+            return _short_trace_text(value.strip(), max_length=120)
+    return ""
+
+
+def _describe_tool_trace(
+    tool_name: str,
+    args: dict[str, Any],
+) -> tuple[str, str, str]:
+    action = _normalize_tool_action(tool_name)
+    path = _trace_path_from_args(args)
+    query = _trace_search_query_from_args(args)
+    command = _short_trace_text(args.get("command") or args.get("cmd"), max_length=140)
+
+    if action == "read":
+        return action, "读取文件", f"读取 {path}" if path else "读取文件"
+    if action == "search":
+        if path and query:
+            return action, "搜索内容", f"在 {path} 中搜索“{query}”"
+        if query:
+            return action, "搜索内容", f"搜索“{query}”"
+        return action, "搜索内容", f"搜索 {path}" if path else "搜索内容"
+    if action == "bash":
+        if command:
+            return action, "执行命令", f"执行命令：{command}"
+        return action, "执行命令", f"在 {path} 中执行命令" if path else "执行命令"
+    if action == "explore":
+        return action, "查看目录", f"查看 {path}" if path else "查看仓库内容"
+    if action in {"write", "edit"}:
+        return action, "修改文件", f"修改 {path}" if path else "修改文件"
+
+    detail = _short_trace_text(json.dumps(args, ensure_ascii=False), max_length=180) if args else tool_name
+    return action, f"调用工具：{tool_name}", detail
+
+
 def _rpc_trace_item_from_event(event: dict[str, Any]) -> dict[str, Any] | None:
     event_type = str(event.get("type") or "")
     if event_type == "tool_execution_start":
         tool_name = str(event.get("toolName") or "unknown")
-        args = event.get("args")
-        detail = f"{tool_name}"
-        if isinstance(args, dict) and args:
-            detail = f"{tool_name} {json.dumps(args, ensure_ascii=False)}"
-        return {
+        args = event.get("args") if isinstance(event.get("args"), dict) else {}
+        action, title, detail = _describe_tool_trace(tool_name, args)
+        trace_item = {
             "kind": "tool",
-            "title": f"调用工具：{tool_name}",
+            "title": title,
             "detail": detail,
-            "action": "tool",
+            "action": action,
+            "tool_name": tool_name,
             "event_type": event_type,
         }
+        if args:
+            trace_item["args"] = args
+        path = _trace_path_from_args(args)
+        if path:
+            trace_item["path"] = path
+        return trace_item
     if event_type == "tool_execution_end" and bool(event.get("isError")):
         tool_name = str(event.get("toolName") or "unknown")
         return {
@@ -324,7 +394,7 @@ async def _run_pi_rpc_agent_chat_async(
                 logger.warning("Failed to send RPC abort after timeout", exc_info=True)
         return _pi_error_response(
             message=PI_TIMEOUT_USER_MESSAGE,
-            warnings=["Pi RPC read timeout."],
+            warnings=["Pi RPC 读取超时。"],
             consulted_pages=consulted_pages,
             history_length=prepared["history_length"],
         )
@@ -449,7 +519,7 @@ async def _stream_pi_rpc_chat(
         yield _pi_error_event(
             _pi_error_response(
                 message=PI_TIMEOUT_USER_MESSAGE,
-                warnings=["Pi RPC read timeout while streaming."],
+                warnings=["Pi RPC 流式读取超时。"],
                 consulted_pages=consulted_pages,
                 history_length=prepared["history_length"],
             )

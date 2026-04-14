@@ -32,6 +32,15 @@ FRONTEND_DIR = ROOT_DIR / "app" / "frontend"
 logger = logging.getLogger(__name__)
 
 
+class NoCacheStaticFiles(StaticFiles):
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
+
 class ChatTurn(BaseModel):
     role: str
     content: str
@@ -47,6 +56,10 @@ class ChatRequest(BaseModel):
 class CreateSessionRequest(BaseModel):
     title: str = Field(default="", description="会话标题")
     system_prompt: str = Field(default="", description="系统提示词")
+
+
+class UpdateSessionRequest(BaseModel):
+    title: str = Field(..., description="会话标题")
 
 
 @asynccontextmanager
@@ -75,7 +88,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
+app.mount("/assets", NoCacheStaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
 
 
 def _dump_turn(turn: ChatTurn) -> dict[str, str]:
@@ -90,19 +103,30 @@ def _resolve_request_id(raw_request_id: str | None) -> str:
     return str(uuid.uuid4())
 
 
+def _frontend_file_response(path: Path) -> FileResponse:
+    return FileResponse(
+        path,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
+
+
 @app.get("/", include_in_schema=False)
 def landing_page() -> FileResponse:
-    return FileResponse(FRONTEND_DIR / "index.html")
+    return _frontend_file_response(FRONTEND_DIR / "index.html")
 
 
 @app.get("/chat", include_in_schema=False)
 def chat_page() -> FileResponse:
-    return FileResponse(FRONTEND_DIR / "index.html")
+    return _frontend_file_response(FRONTEND_DIR / "index.html")
 
 
 @app.get("/wiki", include_in_schema=False)
 def wiki_page_shell() -> FileResponse:
-    return FileResponse(FRONTEND_DIR / "index.html")
+    return _frontend_file_response(FRONTEND_DIR / "index.html")
 
 
 @app.get("/api/health")
@@ -276,7 +300,27 @@ def destroy_session(session_id: str) -> dict[str, object]:
     """销毁指定会话"""
     pool = get_session_pool()
     success = pool.destroy_session(session_id)
-    return {"success": success, "session_id": session_id}
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+    return {"success": True, "session_id": session_id}
+
+
+@app.patch("/api/sessions/{session_id}")
+def rename_session(session_id: str, request: UpdateSessionRequest) -> dict[str, object]:
+    """重命名指定会话"""
+    new_title = request.title.strip()
+    if not new_title:
+        raise HTTPException(status_code=400, detail="Session title cannot be empty")
+
+    pool = get_session_pool()
+    session = pool.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+
+    session.info.title = new_title
+    # 复用 get_session 的持久化逻辑，将最新 title 同步到 registry。
+    pool.get_session(session_id)
+    return {"success": True, "session_id": session_id, "session": session.info.to_dict()}
 
 
 @app.get("/api/sessions/{session_id}")

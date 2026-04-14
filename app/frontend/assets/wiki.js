@@ -27,6 +27,120 @@ function renderInline(text) {
   return rendered;
 }
 
+function decodeUriComponentSafe(value) {
+  try {
+    return decodeURIComponent(String(value || ""));
+  } catch (_error) {
+    return String(value || "");
+  }
+}
+
+function normalizePathSegments(segments) {
+  const normalized = [];
+  segments.forEach((segment) => {
+    const part = String(segment || "").trim();
+    if (!part || part === ".") {
+      return;
+    }
+    if (part === "..") {
+      normalized.pop();
+      return;
+    }
+    normalized.push(part);
+  });
+  return normalized;
+}
+
+function resolveWorkbenchTarget(href, currentPath = "", currentSource = "wiki") {
+  const rawHref = String(href || "").trim();
+  if (!rawHref || rawHref.startsWith("#")) {
+    return null;
+  }
+
+  let candidate = rawHref;
+  try {
+    const url = new URL(rawHref, window.location.origin);
+    if (url.origin !== window.location.origin) {
+      return null;
+    }
+    const page = url.searchParams.get("page");
+    if (page) {
+      return { source: "wiki", path: decodeUriComponentSafe(page) };
+    }
+    const raw = url.searchParams.get("raw");
+    if (raw) {
+      return { source: "raw", path: decodeUriComponentSafe(raw) };
+    }
+    candidate = `${url.pathname}${url.search}${url.hash}`;
+  } catch (_error) {
+    candidate = rawHref;
+  }
+
+  if (/^(https?:|mailto:|tel:|data:|javascript:)/i.test(candidate)) {
+    return null;
+  }
+
+  let normalized = decodeUriComponentSafe(candidate)
+    .replace(window.location.origin, "")
+    .replace(/^\/+/, "");
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.startsWith("?")) {
+    const params = new URLSearchParams(normalized.slice(1));
+    const page = params.get("page");
+    if (page) {
+      return { source: "wiki", path: decodeUriComponentSafe(page) };
+    }
+    const raw = params.get("raw");
+    if (raw) {
+      return { source: "raw", path: decodeUriComponentSafe(raw) };
+    }
+    return null;
+  }
+
+  if (normalized.startsWith("wiki/")) {
+    return { source: "wiki", path: normalized.slice(5) };
+  }
+
+  if (normalized.startsWith("raw/")) {
+    return { source: "raw", path: normalized.slice(4) };
+  }
+
+  const looksLikeRootWikiPath =
+    normalized.startsWith("knowledge/") ||
+    normalized.startsWith("insights/") ||
+    normalized === "index.md" ||
+    normalized === "README.md" ||
+    normalized === "log.md";
+
+  if (looksLikeRootWikiPath) {
+    return { source: "wiki", path: normalized };
+  }
+
+  const baseSegments = currentPath
+    ? currentPath.split("/").filter(Boolean).slice(0, -1)
+    : [];
+  const targetSegments = normalizePathSegments([
+    ...(normalized.startsWith("/") ? [] : baseSegments),
+    ...normalized.split("/"),
+  ]);
+  const targetPath = targetSegments.join("/");
+  if (!targetPath) {
+    return null;
+  }
+
+  if (currentSource === "raw") {
+    return { source: "raw", path: targetPath };
+  }
+  if (targetPath.startsWith("raw/")) {
+    return { source: "raw", path: targetPath.slice(4) };
+  }
+  return { source: "wiki", path: targetPath };
+}
+
 function markdownToHtml(markdown) {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const html = [];
@@ -215,9 +329,15 @@ async function fetchPages(query = "") {
 }
 
 async function loadPage(path) {
-  activePath = path;
   const response = await fetch(currentDetailEndpoint(path));
   const data = await response.json();
+  if (!response.ok) {
+    throw new Error(String(data?.detail || `HTTP ${response.status}`));
+  }
+  if (!data || typeof data !== "object" || !data.path || !data.title) {
+    throw new Error("Wiki API returned an invalid page payload.");
+  }
+  activePath = data.path;
   activePage = data;
   const renderMode = data.render_mode || (activeMode === "wiki" ? "markdown" : "binary");
 
@@ -228,30 +348,15 @@ async function loadPage(path) {
     // 处理内部链接点击
     contentEl.querySelectorAll("a").forEach((a) => {
       const href = a.getAttribute("href") || "";
-      if (href.startsWith("/") || href.startsWith("./") || href.startsWith("../") || !href.includes(":")) {
-        // 内部链接：拦截点击，使用 WikiWorkbench 导航
-        a.addEventListener("click", (e) => {
-          e.preventDefault();
-          let targetPath = href;
-          if (href.startsWith("./")) {
-            targetPath = activePath.split("/").slice(0, -1).join("/") + "/" + href.slice(2);
-          } else if (href.startsWith("../")) {
-            const parts = activePath.split("/");
-            const upCount = href.match(/\.\.\//g)?.length || 0;
-            targetPath = parts.slice(0, parts.length - upCount).join("/") + "/" + href.replace(/\.\.\//g, "");
-          }
-          // 规范化路径
-          targetPath = targetPath.replace(/\/+/g, "/").replace(/^\//, "");
-          // 判断是 wiki 还是 raw
-          if (targetPath.endsWith(".md") || targetPath.startsWith("knowledge/")) {
-            window.WikiWorkbench?.openPage?.(targetPath, "wiki");
-          } else if (targetPath.startsWith("raw/")) {
-            window.WikiWorkbench?.openPage?.(targetPath.slice(4), "raw");
-          } else {
-            window.WikiWorkbench?.openPage?.(targetPath, activeMode);
-          }
-        });
+      const destination = resolveWorkbenchTarget(href, data.path, activeMode);
+      if (!destination) {
+        return;
       }
+      // 内部链接：拦截点击，使用 WikiWorkbench 导航
+      a.addEventListener("click", async (e) => {
+        e.preventDefault();
+        await window.WikiWorkbench?.openPage?.(destination.path, destination.source);
+      });
     });
   } else if (renderMode === "text") {
     contentEl.innerHTML = `<pre><code>${escapeHtml(data.content || "")}</code></pre>`;
@@ -310,7 +415,7 @@ async function bootstrap() {
   } catch (error) {
     categoryEl.textContent = "unavailable";
     titleEl.textContent = "暂时无法读取内容";
-    contentEl.innerHTML = '<p class="empty-state">当前页面已经接好数据结构，但接口还没有返回内容。</p>';
+    contentEl.innerHTML = `<p class="empty-state">${escapeHtml(String(error?.message || "当前页面已经接好数据结构，但接口还没有返回内容。"))}</p>`;
   }
 }
 
@@ -370,13 +475,20 @@ if (quoteIntoChatEl) {
 window.WikiWorkbench = {
   openPage: async (path, source = "wiki") => {
     window.WorkbenchUI?.ensureWikiVisible?.();
-    if (source !== activeMode) {
-      setMode(source);
-      searchEl.value = "";
-      allPages = await fetchPages();
+    try {
+      if (source !== activeMode) {
+        setMode(source);
+        searchEl.value = "";
+        allPages = await fetchPages();
+      }
+      renderList(allPages);
+      await loadPage(path);
+    } catch (error) {
+      categoryEl.textContent = `${source} / unavailable / ${path}`;
+      titleEl.textContent = "暂时无法读取内容";
+      contentEl.innerHTML = `<p class="empty-state">${escapeHtml(String(error?.message || "跳转失败。"))}</p>`;
+      throw error;
     }
-    renderList(allPages);
-    await loadPage(path);
   },
   showSidebar: () => {
     const sidebarEl = document.querySelector(".wiki-sidebar");

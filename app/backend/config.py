@@ -30,12 +30,17 @@ def get_pi_command_path() -> str | None:
     return shutil.which("pi")
 
 
-def get_pi_timeout_seconds() -> int:
-    raw_value = os.getenv("PI_TIMEOUT_SECONDS", "180").strip()
+def get_pi_timeout_seconds() -> int | None:
+    raw_value = os.getenv("PI_TIMEOUT_SECONDS", "").strip().lower()
+    if raw_value in {"", "0", "off", "none", "false", "no"}:
+        return None
     try:
-        return max(10, int(raw_value))
+        parsed = int(raw_value)
     except ValueError:
-        return 180
+        return None
+    if parsed <= 0:
+        return None
+    return max(10, parsed)
 
 
 def get_pi_thinking_level() -> str:

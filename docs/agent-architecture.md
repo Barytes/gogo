@@ -101,7 +101,7 @@ POST /api/sessions/{id}/chat/stream -> SessionPool.send_message_async()
 | `PI_WORKDIR` | `PI_WORKDIR` | `KNOWLEDGE_BASE_DIR` | Pi 工作目录 |
 | `PI_COMMAND` | `PI_COMMAND` | `pi` | RPC 命令 |
 | `PI_RPC_SESSION_DIR` | `PI_RPC_SESSION_DIR` | `../.gogo/pi-rpc-sessions` | RPC 会话与 registry 目录 |
-| `PI_TIMEOUT_SECONDS` | `PI_TIMEOUT_SECONDS` | `180` | 超时（秒） |
+| `PI_TIMEOUT_SECONDS` | `PI_TIMEOUT_SECONDS` | `disabled` | RPC 读超时；留空、`0`、`off` 表示禁用，正整数表示秒数 |
 | `PI_THINKING_LEVEL` | `PI_THINKING_LEVEL` | `medium` | thinking 级别 |
 
 ---
