@@ -7,8 +7,6 @@ from typing import Any
 from .config import get_knowledge_base_dir
 
 
-KNOWLEDGE_BASE_DIR = get_knowledge_base_dir()
-RAW_DIR = KNOWLEDGE_BASE_DIR / "raw"
 TEXT_EXTENSIONS = {
     ".md",
     ".txt",
@@ -22,17 +20,22 @@ TEXT_EXTENSIONS = {
 }
 
 
+def _raw_dir() -> Path:
+    return get_knowledge_base_dir() / "raw"
+
+
 def _iter_raw_files() -> list[Path]:
+    raw_dir = _raw_dir()
     return sorted(
         path
-        for path in RAW_DIR.rglob("*")
+        for path in raw_dir.rglob("*")
         if path.is_file() and not path.name.startswith(".")
     )
 
 
 def _safe_raw_path(relative_path: str) -> Path:
-    candidate = (RAW_DIR / relative_path).resolve()
-    raw_root = RAW_DIR.resolve()
+    raw_root = _raw_dir().resolve()
+    candidate = (raw_root / relative_path).resolve()
     if raw_root not in candidate.parents and candidate != raw_root:
         raise ValueError("Path must stay inside knowledge-base/raw.")
     if not candidate.exists() or not candidate.is_file():
@@ -73,8 +76,9 @@ def _summary_for_file(path: Path) -> str:
 
 
 def _raw_record(path: Path, include_content: bool = False) -> dict[str, Any]:
-    rel_path = path.relative_to(RAW_DIR).as_posix()
-    rel_parent = path.parent.relative_to(RAW_DIR).as_posix()
+    raw_dir = _raw_dir()
+    rel_path = path.relative_to(raw_dir).as_posix()
+    rel_parent = path.parent.relative_to(raw_dir).as_posix()
     category = rel_path.split("/", 1)[0] if "/" in rel_path else "root"
     content_type = _guess_content_type(path)
     is_text = _is_textual(path)

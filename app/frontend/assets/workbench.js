@@ -6,6 +6,14 @@ const hideWikiButtonEl = document.querySelector("#hide-wiki-panel");
 const hideWikiPanelChatButtonEl = document.querySelector("#hide-wiki-panel-chat");
 const showChatButtonEl = document.querySelector("#show-chat-panel");
 const showWikiButtonEl = document.querySelector("#show-wiki-panel");
+const knowledgeBaseNameEl = document.querySelector("#knowledge-base-name");
+const openSettingsButtonEl = document.querySelector("#open-settings-panel");
+const closeSettingsButtonEl = document.querySelector("#close-settings-panel");
+const settingsOverlayEl = document.querySelector("#settings-overlay");
+const knowledgeBasePathInputEl = document.querySelector("#knowledge-base-path-input");
+const knowledgeBaseRecentListEl = document.querySelector("#knowledge-base-recent-list");
+const knowledgeBaseFeedbackEl = document.querySelector("#knowledge-base-settings-feedback");
+const applyKnowledgeBasePathButtonEl = document.querySelector("#apply-knowledge-base-path");
 
 const STORAGE_KEY = "research-kb-workbench-layout";
 
@@ -14,6 +22,7 @@ const workbenchState = {
   chatVisible: true,
   wikiVisible: true,
 };
+let appSettings = null;
 
 function saveWorkbenchState() {
   try {
@@ -121,6 +130,132 @@ hideWikiPanelChatButtonEl?.addEventListener("click", hideWiki);
 showChatButtonEl?.addEventListener("click", showChat);
 showWikiButtonEl?.addEventListener("click", showWiki);
 
+function setKnowledgeBaseFeedback(message, isError = false) {
+  if (!knowledgeBaseFeedbackEl) {
+    return;
+  }
+  if (!message) {
+    knowledgeBaseFeedbackEl.textContent = "";
+    knowledgeBaseFeedbackEl.classList.add("hidden");
+    knowledgeBaseFeedbackEl.style.color = "";
+    return;
+  }
+  knowledgeBaseFeedbackEl.textContent = message;
+  knowledgeBaseFeedbackEl.classList.remove("hidden");
+  knowledgeBaseFeedbackEl.style.color = isError ? "#b1532f" : "#185c52";
+}
+
+function renderKnowledgeBaseSettings() {
+  const knowledgeBase = appSettings?.knowledge_base || null;
+  if (knowledgeBaseNameEl) {
+    knowledgeBaseNameEl.textContent = knowledgeBase?.name || "Knowledge Base";
+    knowledgeBaseNameEl.title = knowledgeBase?.path || knowledgeBase?.name || "Knowledge Base";
+  }
+  if (knowledgeBasePathInputEl) {
+    knowledgeBasePathInputEl.value = knowledgeBase?.path || "";
+  }
+  if (knowledgeBaseRecentListEl) {
+    knowledgeBaseRecentListEl.innerHTML = "";
+    const recent = Array.isArray(knowledgeBase?.recent) ? knowledgeBase.recent : [];
+    recent.forEach((item) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "settings-chip";
+      chip.textContent = item.name || item.path;
+      chip.title = item.path || item.name || "";
+      chip.addEventListener("click", () => {
+        if (knowledgeBasePathInputEl) {
+          knowledgeBasePathInputEl.value = item.path || "";
+          knowledgeBasePathInputEl.focus();
+          knowledgeBasePathInputEl.select();
+        }
+      });
+      knowledgeBaseRecentListEl.appendChild(chip);
+    });
+  }
+}
+
+async function loadAppSettings() {
+  const response = await fetch("/api/settings");
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  appSettings = await response.json();
+  renderKnowledgeBaseSettings();
+}
+
+function openSettingsPanel() {
+  settingsOverlayEl?.classList.remove("hidden");
+  setKnowledgeBaseFeedback("");
+}
+
+function closeSettingsPanel() {
+  settingsOverlayEl?.classList.add("hidden");
+  setKnowledgeBaseFeedback("");
+}
+
+async function applyKnowledgeBasePath() {
+  const nextPath = String(knowledgeBasePathInputEl?.value || "").trim();
+  if (!nextPath) {
+    setKnowledgeBaseFeedback("请输入知识库路径。", true);
+    return;
+  }
+  if (!applyKnowledgeBasePathButtonEl) {
+    return;
+  }
+  applyKnowledgeBasePathButtonEl.disabled = true;
+  setKnowledgeBaseFeedback("正在切换知识库...");
+  try {
+    const response = await fetch("/api/settings/knowledge-base", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ path: nextPath }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.detail || `HTTP ${response.status}`);
+    }
+    setKnowledgeBaseFeedback("知识库已切换，正在刷新页面...");
+    window.setTimeout(() => window.location.reload(), 250);
+  } catch (error) {
+    setKnowledgeBaseFeedback(`切换失败：${error.message}`, true);
+  } finally {
+    applyKnowledgeBasePathButtonEl.disabled = false;
+  }
+}
+
+openSettingsButtonEl?.addEventListener("click", openSettingsPanel);
+closeSettingsButtonEl?.addEventListener("click", closeSettingsPanel);
+applyKnowledgeBasePathButtonEl?.addEventListener("click", applyKnowledgeBasePath);
+
+knowledgeBasePathInputEl?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    void applyKnowledgeBasePath();
+  }
+});
+
+settingsOverlayEl?.addEventListener("click", (event) => {
+  if (event.target === settingsOverlayEl) {
+    closeSettingsPanel();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && settingsOverlayEl && !settingsOverlayEl.classList.contains("hidden")) {
+    closeSettingsPanel();
+  }
+});
+
+void loadAppSettings().catch((error) => {
+  console.error("Failed to load app settings:", error);
+  if (knowledgeBaseNameEl) {
+    knowledgeBaseNameEl.textContent = "Knowledge Base";
+  }
+});
+
 window.WorkbenchUI = {
   getState: () => ({ ...workbenchState }),
   setLayout,
@@ -130,4 +265,5 @@ window.WorkbenchUI = {
   hideWiki,
   ensureChatVisible: showChat,
   ensureWikiVisible: showWiki,
+  getAppSettings: () => appSettings,
 };

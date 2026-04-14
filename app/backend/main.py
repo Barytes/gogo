@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .agent_service import get_agent_backend_status, run_agent_chat, stream_agent_chat, run_session_chat, stream_session_chat
-from .config import get_knowledge_base_dir
+from .config import get_knowledge_base_dir, get_knowledge_base_settings, set_knowledge_base_dir
 from .raw_service import (
     get_raw_file,
     get_raw_file_path,
@@ -88,6 +88,10 @@ class UpdateSessionSettingsRequest(BaseModel):
     model_id: str | None = Field(default=None, description="模型 ID")
 
 
+class UpdateKnowledgeBaseRequest(BaseModel):
+    path: str = Field(..., min_length=1, description="本地知识库路径")
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     pool = get_session_pool()
@@ -158,11 +162,35 @@ def wiki_page_shell() -> FileResponse:
 @app.get("/api/health")
 def healthcheck() -> dict[str, object]:
     agent_status = get_agent_backend_status()
+    kb_settings = get_knowledge_base_settings()
     return {
         "status": "ok",
         "knowledge_base_dir": str(get_knowledge_base_dir()),
+        "knowledge_base_name": kb_settings["name"],
+        "knowledge_base_session_namespace": kb_settings["session_namespace"],
         "agent_mode": agent_status["mode"],
         "agent_status": agent_status,
+    }
+
+
+@app.get("/api/settings")
+def get_app_settings() -> dict[str, object]:
+    return {
+        "knowledge_base": get_knowledge_base_settings(),
+    }
+
+
+@app.patch("/api/settings/knowledge-base")
+def update_knowledge_base(request: UpdateKnowledgeBaseRequest) -> dict[str, object]:
+    reset_session_pool()
+    try:
+        settings = set_knowledge_base_dir(request.path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "success": True,
+        "knowledge_base": settings,
+        "detail": "知识库已切换，会话目录已按知识库隔离。",
     }
 
 

@@ -4,15 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Research KB MVP</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260415-1" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260415-2" />
   </head>
   <body>
     <div class="site-shell app-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Research Knowledge Base</p>
-        </div>
-        <div class="workspace-switch" role="tablist" aria-label="Workbench mode">
+	      <header class="topbar">
+	        <div class="app-title-row">
+	          <button
+	            id="open-settings-panel"
+	            class="topbar-icon-button"
+	            type="button"
+	            aria-label="打开设置面板"
+	            title="设置"
+	          >
+	            ⚙
+	          </button>
+	          <p id="knowledge-base-name" class="eyebrow">Knowledge Base</p>
+	        </div>
+	        <div class="workspace-switch" role="tablist" aria-label="Workbench mode">
           <button id="layout-mode-wiki" class="workspace-switch-button active" type="button">
             Wiki
           </button>
@@ -194,18 +203,52 @@
         </section>
       </main>
 
-      <div class="floating-dock">
+	      <div class="floating-dock">
         <button id="show-wiki-panel" class="button button-primary hidden" type="button">
           打开 Wiki
         </button>
-        <button id="show-chat-panel" class="button button-primary hidden" type="button">
-          打开 Chat
-        </button>
-      </div>
-    </div>
+	        <button id="show-chat-panel" class="button button-primary hidden" type="button">
+	          打开 Chat
+	        </button>
+	      </div>
 
-	    <script src="/assets/workbench.js?v=20260415-1"></script>
-	    <script src="/assets/wiki.js?v=20260415-1"></script>
-	    <script src="/assets/chat.js?v=20260415-1"></script>
+	      <div id="settings-overlay" class="settings-overlay hidden">
+	        <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-panel-title">
+	          <div class="settings-panel-header">
+	            <div>
+	              <p class="eyebrow">Settings</p>
+	              <h2 id="settings-panel-title">工作台设置</h2>
+	            </div>
+	            <button id="close-settings-panel" class="button button-secondary" type="button">关闭</button>
+	          </div>
+	          <div class="settings-section">
+	            <label for="knowledge-base-path-input">知识库路径</label>
+	            <input
+	              id="knowledge-base-path-input"
+	              class="settings-input"
+	              type="text"
+	              placeholder="/Users/you/Desktop/Index"
+	            />
+	            <p id="knowledge-base-path-help" class="settings-help">
+	              当前知识库名称会显示在左上角。切换后会自动隔离该知识库对应的会话目录，不会与其他知识库共用会话历史。
+	            </p>
+	            <div class="settings-actions">
+	              <button id="apply-knowledge-base-path" class="button button-primary" type="button">
+	                切换知识库
+	              </button>
+	            </div>
+	            <div class="settings-subsection">
+	              <p class="settings-subtitle">最近使用</p>
+	              <div id="knowledge-base-recent-list" class="settings-chip-list"></div>
+	            </div>
+	            <p id="knowledge-base-settings-feedback" class="settings-feedback hidden" aria-live="polite"></p>
+	          </div>
+	        </section>
+	      </div>
+	    </div>
+
+	    <script src="/assets/workbench.js?v=20260415-2"></script>
+	    <script src="/assets/wiki.js?v=20260415-2"></script>
+	    <script src="/assets/chat.js?v=20260415-2"></script>
   </body>
 </html>

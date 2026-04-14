@@ -6,12 +6,14 @@ import re
 
 from .config import get_knowledge_base_dir
 
-KNOWLEDGE_BASE_DIR = get_knowledge_base_dir()
-WIKI_DIR = KNOWLEDGE_BASE_DIR / "wiki"
+
+def _wiki_dir() -> Path:
+    return get_knowledge_base_dir() / "wiki"
 
 
 def _iter_wiki_files() -> list[Path]:
-    return sorted(path for path in WIKI_DIR.rglob("*.md") if path.is_file())
+    wiki_dir = _wiki_dir()
+    return sorted(path for path in wiki_dir.rglob("*.md") if path.is_file())
 
 
 def _read_text(path: Path) -> str:
@@ -38,15 +40,16 @@ def _summary_from_text(text: str) -> str:
 
 
 def _category_for_path(path: Path) -> str:
-    rel_path = path.relative_to(WIKI_DIR)
+    rel_path = path.relative_to(_wiki_dir())
     if len(rel_path.parts) == 1:
         return "root"
     return rel_path.parts[0]
 
 
 def _safe_wiki_path(relative_path: str) -> Path:
-    candidate = (WIKI_DIR / relative_path).resolve()
-    if WIKI_DIR.resolve() not in candidate.parents and candidate != WIKI_DIR.resolve():
+    wiki_dir = _wiki_dir().resolve()
+    candidate = (wiki_dir / relative_path).resolve()
+    if wiki_dir not in candidate.parents and candidate != wiki_dir:
         raise ValueError("Path must stay inside knowledge-base/wiki.")
     if candidate.suffix != ".md":
         raise ValueError("Only markdown pages are supported.")
@@ -57,14 +60,15 @@ def _safe_wiki_path(relative_path: str) -> Path:
 
 def _page_record(path: Path, include_content: bool = False) -> dict[str, Any]:
     text = _read_text(path)
-    rel_path = path.relative_to(WIKI_DIR).as_posix()
+    wiki_dir = _wiki_dir()
+    rel_path = path.relative_to(wiki_dir).as_posix()
     record: dict[str, Any] = {
         "source": "wiki",
         "path": rel_path,
         "title": _title_from_text(text, path.stem),
         "summary": _summary_from_text(text),
         "category": _category_for_path(path),
-        "section": path.parent.relative_to(WIKI_DIR).as_posix() or "root",
+        "section": path.parent.relative_to(wiki_dir).as_posix() or "root",
         "modified_at": path.stat().st_mtime,
         "size": path.stat().st_size,
         "content_type": "text/markdown",
@@ -158,8 +162,9 @@ def get_tree() -> dict[str, Any]:
         return node
 
     for path in _iter_wiki_files():
-        rel_path = path.relative_to(WIKI_DIR).as_posix()
-        rel_dir = path.parent.relative_to(WIKI_DIR).as_posix()
+        wiki_dir = _wiki_dir()
+        rel_path = path.relative_to(wiki_dir).as_posix()
+        rel_dir = path.parent.relative_to(wiki_dir).as_posix()
         if rel_dir == ".":
             rel_dir = ""
         parent = ensure_dir(rel_dir)
