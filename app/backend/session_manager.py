@@ -363,6 +363,13 @@ class SessionPool:
                 latest_text = text
         return latest_text
 
+    def _extract_assistant_text_from_message(self, message: Any) -> str:
+        if not isinstance(message, dict):
+            return ""
+        if str(message.get("role") or "") != "assistant":
+            return ""
+        return self._extract_text_from_content(message.get("content"))
+
     def _normalize_tool_action(self, tool_name: str) -> str:
         normalized = tool_name.strip().lower()
         aliases = {
@@ -541,6 +548,7 @@ class SessionPool:
 
         trace: list[dict[str, Any]] = []
         streamed_text_chunks: list[str] = []
+        latest_assistant_text = ""
         client: PiRpcClient | None = None
 
         try:
@@ -589,6 +597,11 @@ class SessionPool:
                     event_type = str(rpc_event.get("type") or "")
                     if event_type == "message_update":
                         assistant_event = rpc_event.get("assistantMessageEvent")
+                        snapshot_text = self._extract_assistant_text_from_message(
+                            rpc_event.get("message")
+                        )
+                        if snapshot_text:
+                            latest_assistant_text = snapshot_text
                         if not isinstance(assistant_event, dict):
                             continue
                         assistant_event_type = str(assistant_event.get("type") or "")
@@ -597,6 +610,11 @@ class SessionPool:
                             if isinstance(delta, str) and delta:
                                 streamed_text_chunks.append(delta)
                                 yield {"type": "text_delta", "delta": delta}
+                            continue
+                        if assistant_event_type == "text_end":
+                            content = assistant_event.get("content")
+                            if isinstance(content, str) and content.strip():
+                                latest_assistant_text = content.strip()
                             continue
                         if assistant_event_type == "thinking_delta":
                             delta = assistant_event.get("delta")
@@ -621,6 +639,13 @@ class SessionPool:
                             return
                         continue
 
+                    if event_type in {"message_end", "turn_end"}:
+                        snapshot_text = self._extract_assistant_text_from_message(
+                            rpc_event.get("message")
+                        )
+                        if snapshot_text:
+                            latest_assistant_text = snapshot_text
+
                     trace_item = self._rpc_trace_item_from_event(rpc_event)
                     if trace_item:
                         trace.append(trace_item)
@@ -630,6 +655,8 @@ class SessionPool:
                         final_text = self._extract_assistant_text_from_messages(
                             rpc_event.get("messages")
                         )
+                        if not final_text:
+                            final_text = latest_assistant_text
                         if not final_text:
                             final_text = "".join(streamed_text_chunks).strip()
                         yield {

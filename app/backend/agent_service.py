@@ -217,6 +217,14 @@ def _extract_assistant_text_from_messages(messages: Any) -> str:
     return latest_text
 
 
+def _extract_assistant_text_from_message(message: Any) -> str:
+    if not isinstance(message, dict):
+        return ""
+    if str(message.get("role") or "") != "assistant":
+        return ""
+    return _extract_text_from_content(message.get("content")).strip()
+
+
 def _normalize_tool_action(tool_name: str) -> str:
     normalized = tool_name.strip().lower()
     aliases = {
@@ -335,6 +343,7 @@ async def _run_pi_rpc_agent_chat_async(
     consulted_pages = prepared["consulted_pages"]
     trace: list[dict[str, Any]] = []
     streamed_text_chunks: list[str] = []
+    latest_assistant_text = ""
     client: PiRpcClient | None = None
 
     try:
@@ -356,12 +365,19 @@ async def _run_pi_rpc_agent_chat_async(
                 event_type = str(event.get("type") or "")
                 if event_type == "message_update":
                     assistant_event = event.get("assistantMessageEvent")
+                    snapshot_text = _extract_assistant_text_from_message(event.get("message"))
+                    if snapshot_text:
+                        latest_assistant_text = snapshot_text
                     if isinstance(assistant_event, dict):
                         assistant_event_type = str(assistant_event.get("type") or "")
                         if assistant_event_type == "text_delta":
                             delta = assistant_event.get("delta")
                             if isinstance(delta, str):
                                 streamed_text_chunks.append(delta)
+                        elif assistant_event_type == "text_end":
+                            content = assistant_event.get("content")
+                            if isinstance(content, str) and content.strip():
+                                latest_assistant_text = content.strip()
                         elif assistant_event_type == "error":
                             reason = str(assistant_event.get("reason") or "error")
                             return _pi_error_response(
@@ -373,12 +389,19 @@ async def _run_pi_rpc_agent_chat_async(
                             )
                     continue
 
+                if event_type in {"message_end", "turn_end"}:
+                    snapshot_text = _extract_assistant_text_from_message(event.get("message"))
+                    if snapshot_text:
+                        latest_assistant_text = snapshot_text
+
                 trace_item = _rpc_trace_item_from_event(event)
                 if trace_item:
                     trace.append(trace_item)
 
                 if event_type == "agent_end":
                     final_text = _extract_assistant_text_from_messages(event.get("messages"))
+                    if not final_text:
+                        final_text = latest_assistant_text
                     if not final_text:
                         final_text = "".join(streamed_text_chunks).strip()
                     if not final_text:
@@ -449,6 +472,7 @@ async def _stream_pi_rpc_chat(
 
     trace: list[dict[str, Any]] = []
     streamed_text_chunks: list[str] = []
+    latest_assistant_text = ""
     client: PiRpcClient | None = None
 
     try:
@@ -471,6 +495,9 @@ async def _stream_pi_rpc_chat(
 
                 if event_type == "message_update":
                     assistant_event = event.get("assistantMessageEvent")
+                    snapshot_text = _extract_assistant_text_from_message(event.get("message"))
+                    if snapshot_text:
+                        latest_assistant_text = snapshot_text
                     if not isinstance(assistant_event, dict):
                         continue
                     assistant_event_type = str(assistant_event.get("type") or "")
@@ -479,6 +506,10 @@ async def _stream_pi_rpc_chat(
                         if isinstance(delta, str):
                             streamed_text_chunks.append(delta)
                             yield {"type": "text_delta", "delta": delta}
+                    elif assistant_event_type == "text_end":
+                        content = assistant_event.get("content")
+                        if isinstance(content, str) and content.strip():
+                            latest_assistant_text = content.strip()
                     elif assistant_event_type == "thinking_delta":
                         delta = assistant_event.get("delta")
                         if isinstance(delta, str):
@@ -497,6 +528,11 @@ async def _stream_pi_rpc_chat(
                         return
                     continue
 
+                if event_type in {"message_end", "turn_end"}:
+                    snapshot_text = _extract_assistant_text_from_message(event.get("message"))
+                    if snapshot_text:
+                        latest_assistant_text = snapshot_text
+
                 trace_item = _rpc_trace_item_from_event(event)
                 if trace_item:
                     trace.append(trace_item)
@@ -504,6 +540,8 @@ async def _stream_pi_rpc_chat(
 
                 if event_type == "agent_end":
                     final_text = _extract_assistant_text_from_messages(event.get("messages"))
+                    if not final_text:
+                        final_text = latest_assistant_text
                     if not final_text:
                         final_text = "".join(streamed_text_chunks).strip()
                     yield {

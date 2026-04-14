@@ -79,6 +79,15 @@
 ### 2. 应用体验
 
 - [ ] 继续优化 Chat / Wiki 工作台体验
+- [ ] 排查长回复可能被提前中断的问题
+  - [ ] 确认问题发生在 Pi RPC 流、前端流消费，还是 session/abort 并发链路
+  - [ ] 复现“明显未输出完就终止”的场景并记录触发条件
+  - [ ] 明确是后端过早返回 `final/error`，还是前端提前停止渲染
+- [ ] 排查回复过程中 `PiRpcClient.abort()` 的并发读冲突
+  - [ ] 复现报错：`RuntimeError: read() called while another coroutine is already waiting for incoming data`
+  - [ ] 评估 `abort()` 与 `prompt_events()` 共享同一 `StreamReader` 的并发读问题
+  - [ ] 评估修复方向：单读协程分发、命令串行化，或专门的 abort 处理机制
+  - [ ] 结合实际工具调用重放一次长回复 + 用户终止场景，确认问题是否与高频工具调用有关
 - [x] 完善会话列表与历史恢复体验
 - [ ] 评估是否需要增加 knowledge-base 来源与当前连接状态展示
 - [x] 会话管理行为对齐 ChatGPT 网页体验
@@ -116,7 +125,8 @@
 
 | 日期 | 变更 |
 |------|------|
-| 2026-04-14 | 将无 session `/api/chat` 与 `/api/chat/stream` 标记为 deprecated；完成固定检索与 `consulted_pages` 评估：两者仅保留为 legacy no-session 兼容能力与应用层 UI 元数据 |
+| 2026-04-14 | 新增待排查问题：长回复可能被提前中断；`PiRpcClient.abort()` 与流式读取并发时出现 `read() called while another coroutine is already waiting for incoming data` |
+| 2026-04-14 | 将无 session 单次聊天迁移到 `/api/legacy/chat` 与 `/api/legacy/chat/stream`，主 `/api/chat*` 收敛为 session-only；完成固定检索与 `consulted_pages` 评估：两者仅保留为 legacy no-session 兼容能力与应用层 UI 元数据 |
 | 2026-04-14 | 完成 `_build_pi_prompt` history 注入评估：session 链路完全依赖 RPC 会话历史；无 session 单次聊天继续保留 prompt 级 history 兜底 |
 | 2026-04-14 | 完成会话管理对齐 ChatGPT：草稿态 + 懒创建 + 会话列表 `...` 菜单 + 重命名 API + 删除语义收敛 |
 | 2026-04-14 | 基于 `gogo-app / gogo-client / gogo-server / knowledge-base` 新划分，重拆任务归属 |

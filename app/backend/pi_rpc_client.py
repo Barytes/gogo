@@ -105,12 +105,14 @@ class PiRpcClient:
         return [item for item in messages if isinstance(item, dict)]
 
     async def abort(self, *, request_id: str | None = None) -> bool:
-        response = await self._send_command_and_wait_response(
-            command_type="abort",
-            payload={},
-            request_id=request_id,
-        )
-        return bool(response.data.get("success"))
+        # Abort is intentionally fire-and-forget. When a prompt stream is already
+        # reading stdout, waiting for a dedicated abort response would race on the
+        # same StreamReader and can raise:
+        # `read() called while another coroutine is already waiting for incoming data`.
+        command_id = (request_id or str(uuid.uuid4())).strip()
+        await self._write_command({"id": command_id, "type": "abort"})
+        logger.info("Pi RPC abort sent: id=%s", command_id)
+        return True
 
     async def new_session(
         self,
