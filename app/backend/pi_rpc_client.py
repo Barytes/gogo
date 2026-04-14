@@ -129,6 +129,20 @@ class PiRpcClient:
             return []
         return [item for item in messages if isinstance(item, dict)]
 
+    async def get_available_models(self, *, request_id: str | None = None) -> list[dict[str, Any]]:
+        response = await self._send_command_and_wait_response(
+            command_type="get_available_models",
+            payload={},
+            request_id=request_id,
+        )
+        data = response.get("data")
+        if not isinstance(data, dict):
+            return []
+        models = data.get("models")
+        if not isinstance(models, list):
+            return []
+        return [item for item in models if isinstance(item, dict)]
+
     async def abort(self, *, request_id: str | None = None) -> bool:
         command_id = (request_id or str(uuid.uuid4())).strip()
         await self._write_command({"id": command_id, "type": "abort"})
@@ -191,6 +205,21 @@ class PiRpcClient:
             request_id=request_id,
         )
         return bool(response.get("success"))
+
+    async def set_model(
+        self,
+        *,
+        provider: str,
+        model_id: str,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        response = await self._send_command_and_wait_response(
+            command_type="set_model",
+            payload={"provider": provider, "modelId": model_id},
+            request_id=request_id,
+        )
+        data = response.get("data")
+        return data if isinstance(data, dict) else {}
 
     async def prompt_events(
         self,

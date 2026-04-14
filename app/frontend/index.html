@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Research KB MVP</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260414-18" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260415-1" />
   </head>
   <body>
     <div class="site-shell app-shell">
@@ -140,12 +140,48 @@
               </div>
 
               <div id="messages" class="messages"></div>
-              <form id="chat-form" class="chat-form">
-                <div class="chat-input-shell">
-                  <textarea
-                    id="chat-input"
-                    name="message"
-                    rows="3"
+	              <form id="chat-form" class="chat-form">
+	                <div class="chat-input-shell">
+	                  <div class="chat-composer-controls">
+	                    <button
+	                      id="chat-upload-button"
+	                      class="chat-control-button chat-control-icon-button"
+	                      type="button"
+	                      aria-label="上传文件"
+	                      title="上传文件"
+	                    >
+	                      +
+	                    </button>
+	                    <div class="chat-control-menu-shell">
+	                      <button
+	                        id="chat-model-button"
+	                        class="chat-control-button"
+	                        type="button"
+	                        aria-haspopup="menu"
+	                        aria-expanded="false"
+	                      >
+	                        模型
+	                      </button>
+	                      <div id="chat-model-menu" class="chat-control-menu hidden" role="menu"></div>
+	                    </div>
+	                    <div class="chat-control-menu-shell">
+	                      <button
+	                        id="chat-thinking-button"
+	                        class="chat-control-button"
+	                        type="button"
+	                        aria-haspopup="menu"
+	                        aria-expanded="false"
+	                      >
+	                        思考水平
+	                      </button>
+	                      <div id="chat-thinking-menu" class="chat-control-menu hidden" role="menu"></div>
+	                    </div>
+	                  </div>
+	                  <p id="chat-settings-hint" class="chat-settings-hint hidden" aria-live="polite"></p>
+	                  <textarea
+	                    id="chat-input"
+	                    name="message"
+	                    rows="3"
                     placeholder="问点什么，比如：这个方向有哪些值得做的 gap？"
                   ></textarea>
                   <button class="chat-submit-button" type="submit" aria-label="发送">
@@ -168,8 +204,8 @@
       </div>
     </div>
 
-    <script src="/assets/workbench.js?v=20260414-18"></script>
-    <script src="/assets/wiki.js?v=20260414-18"></script>
-    <script src="/assets/chat.js?v=20260414-18"></script>
+	    <script src="/assets/workbench.js?v=20260415-1"></script>
+	    <script src="/assets/wiki.js?v=20260415-1"></script>
+	    <script src="/assets/chat.js?v=20260415-1"></script>
   </body>
 </html>

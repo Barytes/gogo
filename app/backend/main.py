@@ -73,10 +73,19 @@ class LegacyChatRequest(BaseModel):
 class CreateSessionRequest(BaseModel):
     title: str = Field(default="", description="会话标题")
     system_prompt: str = Field(default="", description="系统提示词")
+    thinking_level: str = Field(default="", description="初始思考水平")
+    model_provider: str = Field(default="", description="初始模型 provider")
+    model_id: str = Field(default="", description="初始模型 ID")
 
 
 class UpdateSessionRequest(BaseModel):
     title: str = Field(..., description="会话标题")
+
+
+class UpdateSessionSettingsRequest(BaseModel):
+    thinking_level: str | None = Field(default=None, description="思考水平")
+    model_provider: str | None = Field(default=None, description="模型 provider")
+    model_id: str | None = Field(default=None, description="模型 ID")
 
 
 @asynccontextmanager
@@ -165,6 +174,17 @@ def chat_suggestions() -> dict[str, list[str]]:
             "帮我总结 knowledge-base/wiki 的结构。",
             "如果我要接入真实 agent，后端应该怎么替换？",
         ]
+    }
+
+
+@app.get("/api/pi/options")
+def pi_options() -> dict[str, object]:
+    pool = get_session_pool()
+    runtime = pool.get_runtime_options()
+    return {
+        "models": runtime.get("models") or [],
+        "state": runtime.get("state") or {},
+        "thinking_levels": ["off", "minimal", "low", "medium", "high", "xhigh"],
     }
 
 
@@ -313,6 +333,9 @@ def create_session(request: CreateSessionRequest) -> dict[str, object]:
     session_id = pool.create_session(
         system_prompt=request.system_prompt or None,
         title=request.title or None,
+        thinking_level=request.thinking_level or None,
+        model_provider=request.model_provider or None,
+        model_id=request.model_id or None,
     )
     session = pool.get_session(session_id)
     if not session:
@@ -346,6 +369,35 @@ def rename_session(session_id: str, request: UpdateSessionRequest) -> dict[str, 
     # 复用 get_session 的持久化逻辑，将最新 title 同步到 registry。
     pool.get_session(session_id)
     return {"success": True, "session_id": session_id, "session": session.info.to_dict()}
+
+
+@app.patch("/api/sessions/{session_id}/settings")
+def update_session_settings(session_id: str, request: UpdateSessionSettingsRequest) -> dict[str, object]:
+    if request.model_provider is not None and not (request.model_provider or "").strip():
+        raise HTTPException(status_code=400, detail="model_provider cannot be empty when provided")
+    if request.model_id is not None and not (request.model_id or "").strip():
+        raise HTTPException(status_code=400, detail="model_id cannot be empty when provided")
+    if (request.model_provider is None) != (request.model_id is None):
+        raise HTTPException(status_code=400, detail="model_provider and model_id must be provided together")
+    if request.thinking_level is None and request.model_provider is None:
+        raise HTTPException(status_code=400, detail="No session setting changes were provided")
+
+    pool = get_session_pool()
+    try:
+        session = pool.update_session_settings(
+            session_id,
+            thinking_level=request.thinking_level,
+            model_provider=request.model_provider,
+            model_id=request.model_id,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return {"success": True, "session_id": session_id, "session": session}
 
 
 @app.get("/api/sessions/{session_id}")

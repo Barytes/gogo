@@ -3,12 +3,18 @@ const formEl = document.querySelector("#chat-form");
 const inputEl = document.querySelector("#chat-input");
 const submitButtonEl = formEl?.querySelector("button[type='submit']");
 const submitIconEl = submitButtonEl?.querySelector(".chat-submit-icon");
+const uploadButtonEl = document.querySelector("#chat-upload-button");
+const modelButtonEl = document.querySelector("#chat-model-button");
+const modelMenuEl = document.querySelector("#chat-model-menu");
+const thinkingButtonEl = document.querySelector("#chat-thinking-button");
+const thinkingMenuEl = document.querySelector("#chat-thinking-menu");
+const settingsHintEl = document.querySelector("#chat-settings-hint");
 const sessionListEl = document.querySelector("#session-list");
 const sessionListEmptyEl = document.querySelector("#session-list-empty");
 const newSessionButtonEl = document.querySelector("#new-session-button");
 const toggleSessionSidebarButtonEl = document.querySelector("#toggle-session-sidebar");
 const toggleSessionSidebarMainButtonEl = document.querySelector("#toggle-session-sidebar-main");
-const CHAT_UI_VERSION = "2026-04-14.18";
+const CHAT_UI_VERSION = "2026-04-15.1";
 const SESSION_SIDEBAR_STORAGE_KEY = "gogo:session-sidebar-collapsed";
 const DRAFT_VIEW_KEY = "__draft__";
 const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 96;
@@ -40,8 +46,26 @@ const pendingSessionIds = new Set(); // 记录仍在等待回复的 session
 const abortingSessionIds = new Set(); // 记录正在发送终止请求的 session
 const hydratedSessionIds = new Set(); // 已从后端事件存储回放过的 session
 const LAST_ACTIVE_SESSION_KEY = "gogo:last-active-session-id";
+const THINKING_LEVEL_LABELS = {
+  off: "思考关闭",
+  minimal: "最少思考",
+  low: "低思考",
+  medium: "中等思考",
+  high: "高思考",
+  xhigh: "超高思考",
+};
 let shouldAutoScrollMessages = true;
 let syncingProgrammaticMessageScroll = false;
+let availableModels = [];
+let availableThinkingLevels = ["off", "minimal", "low", "medium", "high", "xhigh"];
+let draftChatSettings = {
+  model_provider: "",
+  model_id: "",
+  model_label: "默认模型",
+  thinking_level: "medium",
+};
+let openChatControlMenu = null;
+let settingsHintTimer = null;
 
 function applySessionSidebarState(collapsed) {
   document.body.classList.toggle("session-sidebar-collapsed", Boolean(collapsed));
@@ -74,6 +98,214 @@ function createRequestId() {
     return window.crypto.randomUUID();
   }
   return `req-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeModelRecord(model) {
+  if (!model || typeof model !== "object") {
+    return null;
+  }
+  const provider = String(model.provider || "").trim();
+  const modelId = String(model.id || model.modelId || "").trim();
+  const name = String(model.name || "").trim();
+  if (!provider || !modelId) {
+    return null;
+  }
+  return {
+    provider,
+    model_id: modelId,
+    label: provider && (name || modelId) ? `${provider}/${name || modelId}` : (name || modelId),
+    raw: model,
+  };
+}
+
+function sessionRecord(sessionId) {
+  return sessions.find((item) => item.session_id === sessionId) || null;
+}
+
+function currentChatSettings() {
+  if (!currentSessionId) {
+    return draftChatSettings;
+  }
+  const session = sessionRecord(currentSessionId);
+  return {
+    model_provider: String(session?.model_provider || "").trim(),
+    model_id: String(session?.model_id || "").trim(),
+    model_label: String(session?.model_label || "").trim() || "默认模型",
+    thinking_level: String(session?.thinking_level || draftChatSettings.thinking_level || "medium").trim().toLowerCase(),
+  };
+}
+
+function currentModelButtonText() {
+  const settings = currentChatSettings();
+  return settings.model_label || "默认模型";
+}
+
+function currentThinkingButtonText() {
+  const settings = currentChatSettings();
+  return THINKING_LEVEL_LABELS[settings.thinking_level] || settings.thinking_level || "思考水平";
+}
+
+function currentModelRecord() {
+  const settings = currentChatSettings();
+  return (
+    availableModels.find(
+      (item) => item.provider === settings.model_provider && item.model_id === settings.model_id
+    ) || null
+  );
+}
+
+function supportedThinkingLevelsForModel(model) {
+  if (!model?.raw || typeof model.raw !== "object") {
+    return new Set(availableThinkingLevels);
+  }
+  if (!model.raw.reasoning) {
+    return new Set(["off"]);
+  }
+
+  const supported = new Set(["off", "minimal", "low", "medium", "high"]);
+  const compat = model.raw.compat && typeof model.raw.compat === "object" ? model.raw.compat : {};
+  const effortMap =
+    compat.reasoningEffortMap && typeof compat.reasoningEffortMap === "object"
+      ? compat.reasoningEffortMap
+      : null;
+
+  if (effortMap && effortMap.xhigh) {
+    supported.add("xhigh");
+  } else if (
+    model.provider === "openai" &&
+    /codex-max/i.test(model.model_id)
+  ) {
+    supported.add("xhigh");
+  }
+  return supported;
+}
+
+function isThinkingLevelSupported(level) {
+  const model = currentModelRecord();
+  return supportedThinkingLevelsForModel(model).has(level);
+}
+
+function showSettingsHint(message) {
+  if (!settingsHintEl) {
+    return;
+  }
+  settingsHintEl.textContent = message;
+  settingsHintEl.classList.remove("hidden");
+  if (settingsHintTimer) {
+    window.clearTimeout(settingsHintTimer);
+  }
+  settingsHintTimer = window.setTimeout(() => {
+    settingsHintEl.classList.add("hidden");
+    settingsHintTimer = null;
+  }, 3200);
+}
+
+function refreshSettingsHintState() {
+  const settings = currentChatSettings();
+  if (settings.thinking_level && !isThinkingLevelSupported(settings.thinking_level)) {
+    showSettingsHint(`当前模型不支持“${currentThinkingButtonText()}”。`);
+    return;
+  }
+  if (settingsHintEl) {
+    settingsHintEl.classList.add("hidden");
+  }
+  if (settingsHintTimer) {
+    window.clearTimeout(settingsHintTimer);
+    settingsHintTimer = null;
+  }
+}
+
+function closeChatControlMenus() {
+  openChatControlMenu = null;
+  modelMenuEl?.classList.add("hidden");
+  thinkingMenuEl?.classList.add("hidden");
+  modelButtonEl?.setAttribute("aria-expanded", "false");
+  thinkingButtonEl?.setAttribute("aria-expanded", "false");
+}
+
+function renderChatControlMenus() {
+  const current = currentChatSettings();
+
+  if (modelMenuEl) {
+    modelMenuEl.innerHTML = "";
+    for (const model of availableModels) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "chat-control-menu-item";
+      if (model.provider === current.model_provider && model.model_id === current.model_id) {
+        item.classList.add("active");
+      }
+      item.textContent = model.label;
+      item.dataset.provider = model.provider;
+      item.dataset.modelId = model.model_id;
+      item.addEventListener("click", async () => {
+        closeChatControlMenus();
+        await applyModelSelection(model);
+      });
+      modelMenuEl.appendChild(item);
+    }
+  }
+
+  if (thinkingMenuEl) {
+    thinkingMenuEl.innerHTML = "";
+    for (const level of availableThinkingLevels) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "chat-control-menu-item";
+      if (level === current.thinking_level) {
+        item.classList.add("active");
+      }
+      if (!isThinkingLevelSupported(level)) {
+        item.classList.add("unsupported");
+      }
+      item.textContent = THINKING_LEVEL_LABELS[level] || level;
+      item.dataset.level = level;
+      item.addEventListener("click", async () => {
+        closeChatControlMenus();
+        if (!isThinkingLevelSupported(level)) {
+          showSettingsHint(`当前模型不支持“${THINKING_LEVEL_LABELS[level] || level}”。`);
+          return;
+        }
+        await applyThinkingSelection(level);
+      });
+      thinkingMenuEl.appendChild(item);
+    }
+  }
+}
+
+function refreshChatControls() {
+  const isPendingForCurrent = Boolean(currentSessionId && pendingSessionIds.has(currentSessionId));
+  const isAbortingCurrent = Boolean(currentSessionId && abortingSessionIds.has(currentSessionId));
+  const disabled = isPendingForCurrent || isAbortingCurrent;
+
+  if (modelButtonEl) {
+    modelButtonEl.textContent = currentModelButtonText();
+    modelButtonEl.title = currentModelButtonText();
+    modelButtonEl.disabled = disabled || availableModels.length === 0;
+  }
+  if (thinkingButtonEl) {
+    thinkingButtonEl.textContent = currentThinkingButtonText();
+    thinkingButtonEl.title = currentThinkingButtonText();
+    thinkingButtonEl.disabled = disabled || availableThinkingLevels.length === 0;
+  }
+  if (uploadButtonEl) {
+    uploadButtonEl.disabled = disabled;
+  }
+
+  renderChatControlMenus();
+  refreshSettingsHintState();
+}
+
+function toggleChatControlMenu(name) {
+  const nextMenu = openChatControlMenu === name ? null : name;
+  openChatControlMenu = nextMenu;
+  modelMenuEl?.classList.toggle("hidden", nextMenu !== "model");
+  thinkingMenuEl?.classList.toggle("hidden", nextMenu !== "thinking");
+  modelButtonEl?.setAttribute("aria-expanded", String(nextMenu === "model"));
+  thinkingButtonEl?.setAttribute("aria-expanded", String(nextMenu === "thinking"));
+  if (nextMenu) {
+    renderChatControlMenus();
+  }
 }
 
 function getViewKey(sessionId) {
@@ -542,6 +774,7 @@ function setChatPending(isPending) {
 
 function refreshChatPendingState() {
   setChatPending(Boolean(currentSessionId && pendingSessionIds.has(currentSessionId)));
+  refreshChatControls();
 }
 
 function collapseSessionSidebarForWikiLayout() {
@@ -1344,6 +1577,14 @@ async function switchToSession(sessionId, { skipSave = false } = {}) {
   currentSessionId = sessionId;
   history = loadSessionHistory(currentSessionId);
   rememberSessionId(currentSessionId);
+  try {
+    const session = await fetchSessionDetail(sessionId);
+    if (session) {
+      mergeSessionIntoCache(session);
+    }
+  } catch (error) {
+    console.warn("Failed to refresh current session detail:", error);
+  }
   if (restoreSessionView(sessionId)) {
     refreshChatPendingState();
     renderSessionList();
@@ -1377,6 +1618,137 @@ async function fetchSessions() {
   return Array.isArray(data.sessions) ? data.sessions : [];
 }
 
+async function fetchPiOptions() {
+  const response = await fetch("/api/pi/options");
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response));
+  }
+  return response.json();
+}
+
+function applyPiOptions(payload) {
+  const models = Array.isArray(payload?.models) ? payload.models.map(normalizeModelRecord).filter(Boolean) : [];
+  availableModels = models;
+
+  const levels = Array.isArray(payload?.thinking_levels) ? payload.thinking_levels : [];
+  availableThinkingLevels = levels.length ? levels.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean) : availableThinkingLevels;
+
+  const state = payload?.state && typeof payload.state === "object" ? payload.state : {};
+  const draftModel = normalizeModelRecord(state.model);
+  if (draftModel) {
+    draftChatSettings.model_provider = draftModel.provider;
+    draftChatSettings.model_id = draftModel.model_id;
+    draftChatSettings.model_label = draftModel.label;
+  } else if (!draftChatSettings.model_label && models[0]) {
+    draftChatSettings.model_provider = models[0].provider;
+    draftChatSettings.model_id = models[0].model_id;
+    draftChatSettings.model_label = models[0].label;
+  }
+  const draftThinkingLevel = String(state.thinkingLevel || draftChatSettings.thinking_level || "medium").trim().toLowerCase();
+  if (draftThinkingLevel) {
+    draftChatSettings.thinking_level = draftThinkingLevel;
+  }
+}
+
+function mergeSessionIntoCache(sessionPayload) {
+  if (!sessionPayload?.session_id) {
+    return;
+  }
+  const index = sessions.findIndex((item) => item.session_id === sessionPayload.session_id);
+  if (index >= 0) {
+    sessions[index] = { ...sessions[index], ...sessionPayload };
+  } else {
+    sessions.unshift(sessionPayload);
+  }
+}
+
+async function fetchSessionDetail(sessionId) {
+  const safeSessionId = encodeURIComponent(sessionId);
+  const response = await fetch(`/api/sessions/${safeSessionId}`);
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response));
+  }
+  const payload = await response.json();
+  return payload?.session || null;
+}
+
+async function applyModelSelection(model) {
+  if (!model) {
+    return;
+  }
+  if (!currentSessionId) {
+    draftChatSettings = {
+      ...draftChatSettings,
+      model_provider: model.provider,
+      model_id: model.model_id,
+      model_label: model.label,
+    };
+    refreshChatControls();
+    return;
+  }
+
+  try {
+    const safeSessionId = encodeURIComponent(currentSessionId);
+    const response = await fetch(`/api/sessions/${safeSessionId}/settings`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model_provider: model.provider,
+        model_id: model.model_id,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(await extractErrorMessage(response));
+    }
+    const payload = await response.json();
+    mergeSessionIntoCache(payload?.session || null);
+    renderSessionList();
+    refreshChatControls();
+  } catch (error) {
+    console.error("Failed to switch model:", error);
+    appendMessage("assistant", `切换模型失败：${error.message}`);
+  }
+}
+
+async function applyThinkingSelection(level) {
+  if (!level) {
+    return;
+  }
+  if (!currentSessionId) {
+    draftChatSettings = {
+      ...draftChatSettings,
+      thinking_level: level,
+    };
+    refreshChatControls();
+    return;
+  }
+
+  try {
+    const safeSessionId = encodeURIComponent(currentSessionId);
+    const response = await fetch(`/api/sessions/${safeSessionId}/settings`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        thinking_level: level,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(await extractErrorMessage(response));
+    }
+    const payload = await response.json();
+    mergeSessionIntoCache(payload?.session || null);
+    renderSessionList();
+    refreshChatControls();
+  } catch (error) {
+    console.error("Failed to switch thinking level:", error);
+    appendMessage("assistant", `切换思考水平失败：${error.message}`);
+  }
+}
+
 async function reloadSessions() {
   try {
     sessions = await fetchSessions();
@@ -1384,6 +1756,7 @@ async function reloadSessions() {
       openSessionMenuId = null;
     }
     renderSessionList();
+    refreshChatControls();
   } catch (error) {
     console.error("Failed to load sessions:", error);
     appendMessage("assistant", `加载会话列表失败：${error.message}`);
@@ -1399,6 +1772,9 @@ async function createSessionForFirstMessage(message) {
     body: JSON.stringify({
       title: buildAutoSessionTitle(message),
       system_prompt: "",
+      thinking_level: draftChatSettings.thinking_level,
+      model_provider: draftChatSettings.model_provider,
+      model_id: draftChatSettings.model_id,
     }),
   });
 
@@ -1416,6 +1792,7 @@ async function createSessionForFirstMessage(message) {
   history = ensureSessionHistory(sid);
   hydratedSessionIds.add(sid);
   rememberSessionId(sid);
+  mergeSessionIntoCache(data.session || null);
   await reloadSessions();
   return sid;
 }
@@ -1714,6 +2091,9 @@ document.addEventListener("click", (event) => {
   if (!(target instanceof Element)) {
     return;
   }
+  if (!target.closest(".chat-control-menu-shell")) {
+    closeChatControlMenus();
+  }
   if (target.closest(".session-item")) {
     return;
   }
@@ -1724,14 +2104,42 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && openSessionMenuId) {
+  if (event.key !== "Escape") {
+    return;
+  }
+  closeChatControlMenus();
+  if (openSessionMenuId) {
     openSessionMenuId = null;
     renderSessionList();
   }
 });
 
+uploadButtonEl?.addEventListener("click", () => {
+  appendMessage("assistant", "上传文件与 ingest 入口还没接后端流程，这里先把按钮位置留好了。");
+});
+
+modelButtonEl?.addEventListener("click", () => {
+  if (modelButtonEl.disabled) {
+    return;
+  }
+  toggleChatControlMenu("model");
+});
+
+thinkingButtonEl?.addEventListener("click", () => {
+  if (thinkingButtonEl.disabled) {
+    return;
+  }
+  toggleChatControlMenu("thinking");
+});
+
 async function bootstrapChat() {
   applySessionSidebarState(loadSessionSidebarState());
+  try {
+    applyPiOptions(await fetchPiOptions());
+  } catch (error) {
+    console.error("Failed to load Pi options:", error);
+    appendMessage("assistant", `加载模型与思考水平选项失败：${error.message}`);
+  }
   await reloadSessions();
 
   const rememberedSessionId = getRememberedSessionId();
@@ -1747,6 +2155,7 @@ async function bootstrapChat() {
   } else {
     enterDraftState({ skipSave: true });
   }
+  refreshChatControls();
 }
 
 bootstrapChat();

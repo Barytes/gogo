@@ -68,6 +68,10 @@ class SessionInfo:
     message_count: int = 0
     title: str = ""
     pending_request_id: str | None = None
+    model_provider: str = ""
+    model_id: str = ""
+    model_label: str = ""
+    thinking_level: str = "medium"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -77,6 +81,10 @@ class SessionInfo:
             "message_count": self.message_count,
             "title": self.title or f"会话 {self.session_id[:8]}",
             "is_pending": bool(self.pending_request_id),
+            "model_provider": self.model_provider,
+            "model_id": self.model_id,
+            "model_label": self.model_label,
+            "thinking_level": self.thinking_level,
         }
 
 
@@ -94,6 +102,7 @@ class SessionProcess:
 
     def __post_init__(self) -> None:
         self.info.session_id = self.session_id
+        self.info.thinking_level = self.thinking_level
 
 
 class SessionPool:
@@ -156,6 +165,9 @@ class SessionPool:
             "session_file": session.session_file,
             "workdir": session.workdir,
             "thinking_level": session.thinking_level,
+            "model_provider": session.info.model_provider,
+            "model_id": session.info.model_id,
+            "model_label": session.info.model_label,
             "title": session.info.title,
             "created_at": session.info.created_at,
             "last_used_at": session.info.last_used_at,
@@ -183,6 +195,10 @@ class SessionPool:
             session.info.last_used_at = float(record.get("last_used_at") or session.info.created_at)
             session.info.message_count = int(record.get("message_count") or 0)
             session.info.title = str(record.get("title") or "").strip()
+            session.info.model_provider = str(record.get("model_provider") or "").strip()
+            session.info.model_id = str(record.get("model_id") or "").strip()
+            session.info.model_label = str(record.get("model_label") or "").strip()
+            session.info.thinking_level = session.thinking_level
             self._sessions[sid] = session
 
     def _evict_oldest(self) -> None:
@@ -201,6 +217,8 @@ class SessionPool:
         self,
         cwd: str | None = None,
         thinking_level: str | None = None,
+        model_provider: str | None = None,
+        model_id: str | None = None,
         system_prompt: str | None = None,
         title: str | None = None,
     ) -> str:
@@ -215,12 +233,47 @@ class SessionPool:
                 workdir=str(cwd) if cwd else str(get_pi_workdir()),
                 thinking_level=thinking_level or get_pi_thinking_level(),
             )
+            session.info.model_provider = (model_provider or "").strip()
+            session.info.model_id = (model_id or "").strip()
             if title:
                 session.info.title = title
             self._bootstrap_rpc_session(session)
             self._sessions[sid] = session
             self._sync_registry_from_session(session)
             return sid
+
+    def _model_label_from_parts(self, *, provider: str, model_id: str, name: str = "") -> str:
+        provider = provider.strip()
+        model_id = model_id.strip()
+        name = name.strip()
+        if provider and name:
+            return f"{provider}/{name}"
+        if provider and model_id:
+            return f"{provider}/{model_id}"
+        return name or model_id
+
+    def _sync_session_from_state(self, session: SessionProcess, state: dict[str, Any]) -> None:
+        session_name = str(state.get("sessionName") or "").strip()
+        if session_name:
+            session.info.title = session_name
+
+        thinking_level = str(state.get("thinkingLevel") or "").strip().lower()
+        if thinking_level:
+            session.thinking_level = thinking_level
+            session.info.thinking_level = thinking_level
+
+        model = state.get("model")
+        if isinstance(model, dict):
+            provider = str(model.get("provider") or "").strip()
+            model_id = str(model.get("id") or model.get("modelId") or "").strip()
+            name = str(model.get("name") or "").strip()
+            session.info.model_provider = provider
+            session.info.model_id = model_id
+            session.info.model_label = self._model_label_from_parts(
+                provider=provider,
+                model_id=model_id,
+                name=name,
+            )
 
     def _bootstrap_rpc_session(self, session: SessionProcess) -> None:
         command_path = get_pi_command_path()
@@ -239,6 +292,12 @@ class SessionPool:
             ) as client:
                 await client.get_state(request_id=f"{session.session_id}:bootstrap:state")
                 await client.new_session(request_id=f"{session.session_id}:bootstrap:new")
+                if session.info.model_provider and session.info.model_id:
+                    await client.set_model(
+                        provider=session.info.model_provider,
+                        model_id=session.info.model_id,
+                        request_id=f"{session.session_id}:bootstrap:model",
+                    )
                 await client.set_thinking_level(
                     level=session.thinking_level,
                     request_id=f"{session.session_id}:bootstrap:thinking",
@@ -257,10 +316,7 @@ class SessionPool:
         if not session_file:
             raise RuntimeError("RPC session bootstrap failed: missing sessionFile")
         session.session_file = session_file
-
-        session_name = str(state.get("sessionName") or "").strip()
-        if session_name:
-            session.info.title = session_name
+        self._sync_session_from_state(session, state)
 
     def get_session(self, session_id: str) -> SessionProcess | None:
         with self._lock:
@@ -278,6 +334,86 @@ class SessionPool:
                 reverse=True,
             )
             return [item.info.to_dict() for item in items]
+
+    def get_runtime_options(self) -> dict[str, Any]:
+        command_path = get_pi_command_path()
+        if not command_path:
+            raise RuntimeError("RPC mode requires `pi` command on PATH.")
+
+        async def load_options() -> dict[str, Any]:
+            async with PiRpcClient(
+                command_path=command_path,
+                cwd=str(get_pi_workdir()),
+                timeout_seconds=get_pi_timeout_seconds(),
+                extra_args=["--session-dir", str(get_pi_rpc_session_dir())],
+            ) as client:
+                state = await client.get_state(request_id="models:state")
+                models = await client.get_available_models(request_id="models:list")
+                return {
+                    "state": state,
+                    "models": models,
+                }
+
+        return _run_coro_sync(load_options())
+
+    def update_session_settings(
+        self,
+        session_id: str,
+        *,
+        thinking_level: str | None = None,
+        model_provider: str | None = None,
+        model_id: str | None = None,
+    ) -> dict[str, Any]:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if not session:
+                raise KeyError(session_id)
+            if session.info.pending_request_id:
+                raise RuntimeError("该会话仍在回复中，暂时无法切换模型或思考水平。")
+
+        command_path = get_pi_command_path()
+        if not command_path:
+            raise RuntimeError("RPC mode requires `pi` command on PATH.")
+
+        requested_provider = (model_provider or "").strip()
+        requested_model_id = (model_id or "").strip()
+        requested_thinking = (thinking_level or "").strip().lower()
+
+        async def update_settings() -> dict[str, Any]:
+            async with PiRpcClient(
+                command_path=command_path,
+                cwd=session.workdir,
+                timeout_seconds=get_pi_timeout_seconds(),
+                extra_args=["--session-dir", str(get_pi_rpc_session_dir())],
+            ) as client:
+                await client.switch_session(
+                    session_path=session.session_file,
+                    request_id=f"{session_id}:settings:switch",
+                )
+                if requested_provider and requested_model_id:
+                    await client.set_model(
+                        provider=requested_provider,
+                        model_id=requested_model_id,
+                        request_id=f"{session_id}:settings:model",
+                    )
+                if requested_thinking:
+                    await client.set_thinking_level(
+                        level=requested_thinking,
+                        request_id=f"{session_id}:settings:thinking",
+                    )
+                return await client.get_state(
+                    request_id=f"{session_id}:settings:state",
+                )
+
+        state = _run_coro_sync(update_settings())
+        with self._lock:
+            latest = self._sessions.get(session_id)
+            if latest is None:
+                raise KeyError(session_id)
+            self._sync_session_from_state(latest, state)
+            latest.info.last_used_at = time.time()
+            self._sync_registry_from_session(latest)
+            return latest.info.to_dict()
 
     def get_session_count(self) -> int:
         with self._lock:
