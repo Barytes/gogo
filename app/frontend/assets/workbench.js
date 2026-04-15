@@ -10,6 +10,8 @@ const knowledgeBaseNameEl = document.querySelector("#knowledge-base-name");
 const openSettingsButtonEl = document.querySelector("#open-settings-panel");
 const closeSettingsButtonEl = document.querySelector("#close-settings-panel");
 const settingsOverlayEl = document.querySelector("#settings-overlay");
+const settingsNavButtonEls = Array.from(document.querySelectorAll("[data-settings-section]"));
+const settingsSectionPaneEls = Array.from(document.querySelectorAll("[data-settings-section-pane]"));
 const knowledgeBasePathInputEl = document.querySelector("#knowledge-base-path-input");
 const knowledgeBaseRecentListEl = document.querySelector("#knowledge-base-recent-list");
 const knowledgeBaseFeedbackEl = document.querySelector("#knowledge-base-settings-feedback");
@@ -41,6 +43,13 @@ const saveProviderButtonEl = document.querySelector("#save-provider-button");
 const providerDesktopLoginButtonEl = document.querySelector("#provider-desktop-login-button");
 const resetProviderButtonEl = document.querySelector("#reset-provider-button");
 const providerFeedbackEl = document.querySelector("#provider-settings-feedback");
+const refreshDiagnosticsButtonEl = document.querySelector("#refresh-diagnostics-button");
+const diagnosticsFeedbackEl = document.querySelector("#diagnostics-feedback");
+const diagnosticsStatusChipsEl = document.querySelector("#diagnostics-status-chips");
+const diagnosticsKbListEl = document.querySelector("#diagnostics-kb-list");
+const diagnosticsPiListEl = document.querySelector("#diagnostics-pi-list");
+const diagnosticsSessionListEl = document.querySelector("#diagnostics-session-list");
+const diagnosticsProviderListEl = document.querySelector("#diagnostics-provider-list");
 
 const STORAGE_KEY = "research-kb-workbench-layout";
 
@@ -53,6 +62,12 @@ let appSettings = null;
 let providerFormMode = "api";
 let editingProviderKey = "";
 let providerAuthMode = "desktop-pi-login";
+let activeSettingsSection = "knowledge-base";
+const diagnosticsState = {
+  loading: false,
+  loadedAt: 0,
+  data: null,
+};
 
 function saveWorkbenchState() {
   try {
@@ -159,6 +174,11 @@ hideWikiButtonEl?.addEventListener("click", hideWiki);
 hideWikiPanelChatButtonEl?.addEventListener("click", hideWiki);
 showChatButtonEl?.addEventListener("click", showChat);
 showWikiButtonEl?.addEventListener("click", showWiki);
+settingsNavButtonEls.forEach((button) => {
+  button.addEventListener("click", () => {
+    setActiveSettingsSection(button.dataset.settingsSection || "knowledge-base");
+  });
+});
 
 function setFeedback(element, message, isError = false) {
   if (!element) {
@@ -181,6 +201,160 @@ function setKnowledgeBaseFeedback(message, isError = false) {
 
 function setProviderFeedback(message, isError = false) {
   setFeedback(providerFeedbackEl, message, isError);
+}
+
+function setDiagnosticsFeedback(message, isError = false) {
+  setFeedback(diagnosticsFeedbackEl, message, isError);
+}
+
+function renderDiagnosticsList(element, items) {
+  if (!element) {
+    return;
+  }
+  element.innerHTML = "";
+  items.forEach(([label, value]) => {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    element.appendChild(dt);
+    element.appendChild(dd);
+  });
+}
+
+function diagnosticsPathLabel(item) {
+  if (!item || !item.path) {
+    return "—";
+  }
+  const parts = [item.path];
+  parts.push(item.exists ? "存在" : "不存在");
+  if (item.exists) {
+    parts.push(item.is_dir ? "目录" : "文件");
+  }
+  return parts.join(" · ");
+}
+
+function diagnosticsValue(value, fallback = "—") {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+  if (typeof value === "boolean") {
+    return value ? "是" : "否";
+  }
+  const text = String(value).trim();
+  return text || fallback;
+}
+
+function renderDiagnostics() {
+  const payload = diagnosticsState.data;
+  const health = payload?.health || {};
+  const knowledgeBase = payload?.knowledge_base || {};
+  const sessions = payload?.sessions || {};
+  const providers = payload?.providers || {};
+  const defaults = providers.defaults || {};
+  const piRuntime = payload?.pi_runtime || {};
+
+  if (diagnosticsStatusChipsEl) {
+    diagnosticsStatusChipsEl.innerHTML = "";
+    const chips = [
+      `运行时：${diagnosticsValue(health.runtime)}`,
+      `Pi RPC：${health.pi_rpc_available ? "可用" : "不可用"}`,
+      `Pi 状态：${health.runtime_options_ok ? "已连通" : "拉取失败"}`,
+      `知识库：${diagnosticsValue(knowledgeBase.name)}`,
+    ];
+    chips.forEach((label) => {
+      const chip = document.createElement("span");
+      chip.className = "settings-chip";
+      chip.textContent = label;
+      diagnosticsStatusChipsEl.appendChild(chip);
+    });
+  }
+
+  renderDiagnosticsList(diagnosticsKbListEl, [
+    ["名称", diagnosticsValue(knowledgeBase.name)],
+    ["路径", diagnosticsValue(knowledgeBase.path)],
+    ["Session Namespace", diagnosticsValue(knowledgeBase.session_namespace)],
+    ["Wiki 目录", diagnosticsPathLabel(knowledgeBase.wiki_dir)],
+    ["Raw 目录", diagnosticsPathLabel(knowledgeBase.raw_dir)],
+    ["Inbox 目录", diagnosticsPathLabel(knowledgeBase.inbox_dir)],
+  ]);
+
+  renderDiagnosticsList(diagnosticsPiListEl, [
+    ["命令", diagnosticsValue(piRuntime.command)],
+    ["命令路径", diagnosticsValue(piRuntime.command_path)],
+    ["超时", diagnosticsValue(piRuntime.timeout_seconds, "已关闭")],
+    ["工作目录", diagnosticsValue(piRuntime.workdir)],
+    ["默认思考", diagnosticsValue(piRuntime.default_thinking_level)],
+    ["当前模型", diagnosticsValue(piRuntime.current_provider && piRuntime.current_model_id ? `${piRuntime.current_provider}/${piRuntime.current_model_id}` : "")],
+    ["当前思考", diagnosticsValue(piRuntime.current_thinking_level)],
+    ["可用模型数", diagnosticsValue(piRuntime.available_model_count)],
+    ["可用 Provider 数", diagnosticsValue(piRuntime.available_provider_count)],
+    ["Extension", Array.isArray(providers.extension_paths) && providers.extension_paths.length ? providers.extension_paths.join("\n") : "未加载"],
+    ["Pi 错误", diagnosticsValue(piRuntime.runtime_error, "无")],
+  ]);
+
+  renderDiagnosticsList(diagnosticsSessionListEl, [
+    ["活跃会话数", diagnosticsValue(sessions.pool_count)],
+    ["Session 目录", diagnosticsPathLabel(sessions.session_dir)],
+    ["Agent 模式", diagnosticsValue(health.agent_mode)],
+    ["Pi 后端", diagnosticsValue(health.pi_backend_mode)],
+    ["桌面运行时", diagnosticsValue(health.desktop_runtime)],
+    ["刷新时间", diagnosticsValue(payload?.generated_at)],
+  ]);
+
+  renderDiagnosticsList(diagnosticsProviderListEl, [
+    ["默认 Provider", diagnosticsValue(defaults.provider)],
+    ["默认模型", diagnosticsValue(defaults.model)],
+    ["默认思考", diagnosticsValue(defaults.thinking_level)],
+    ["Profile 数", diagnosticsValue(providers.profile_count)],
+    ["gogo 管理数", diagnosticsValue(providers.managed_count)],
+    ["已连 OAuth", diagnosticsValue(providers.oauth_connected_count)],
+  ]);
+}
+
+async function loadDiagnostics(force = false) {
+  if (diagnosticsState.loading) {
+    return;
+  }
+  if (!force && diagnosticsState.data) {
+    renderDiagnostics();
+    return;
+  }
+  diagnosticsState.loading = true;
+  refreshDiagnosticsButtonEl && (refreshDiagnosticsButtonEl.disabled = true);
+  setDiagnosticsFeedback("正在刷新诊断信息...");
+  try {
+    const response = await fetch("/api/settings/diagnostics");
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.detail || `HTTP ${response.status}`);
+    }
+    diagnosticsState.data = payload;
+    diagnosticsState.loadedAt = Date.now();
+    renderDiagnostics();
+    setDiagnosticsFeedback(`诊断信息已刷新：${diagnosticsValue(payload.generated_at)}`);
+  } catch (error) {
+    setDiagnosticsFeedback(`刷新失败：${error.message}`, true);
+  } finally {
+    diagnosticsState.loading = false;
+    refreshDiagnosticsButtonEl && (refreshDiagnosticsButtonEl.disabled = false);
+  }
+}
+
+function setActiveSettingsSection(section) {
+  activeSettingsSection =
+    section === "model-providers" || section === "diagnostics" ? section : "knowledge-base";
+  settingsNavButtonEls.forEach((button) => {
+    const isActive = button.dataset.settingsSection === activeSettingsSection;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+  settingsSectionPaneEls.forEach((pane) => {
+    pane.classList.toggle("active", pane.dataset.settingsSectionPane === activeSettingsSection);
+  });
+  if (activeSettingsSection === "diagnostics") {
+    void loadDiagnostics();
+  }
 }
 
 function renderKnowledgeBaseSettings() {
@@ -414,6 +588,7 @@ function populateProviderForm(profile) {
     resetProviderForm(providerFormMode);
     return;
   }
+  setActiveSettingsSection("model-providers");
   editingProviderKey = String(profile.provider_key || "");
   applyProviderMode(profile.config_kind === "oauth" ? "oauth" : "api");
   if (providerKeyInputEl) {
@@ -583,14 +758,17 @@ async function loadAppSettings() {
 
 function openSettingsPanel() {
   settingsOverlayEl?.classList.remove("hidden");
+  setActiveSettingsSection(activeSettingsSection);
   setKnowledgeBaseFeedback("");
   setProviderFeedback("");
+  setDiagnosticsFeedback("");
 }
 
 function closeSettingsPanel() {
   settingsOverlayEl?.classList.add("hidden");
   setKnowledgeBaseFeedback("");
   setProviderFeedback("");
+  setDiagnosticsFeedback("");
 }
 
 async function applyKnowledgeBasePath() {
@@ -755,6 +933,9 @@ providerDesktopLoginButtonEl?.addEventListener("click", async () => {
   await triggerDesktopPiLogin(String(providerKeyInputEl?.value || "").trim());
 });
 resetProviderButtonEl?.addEventListener("click", () => resetProviderForm(providerFormMode));
+refreshDiagnosticsButtonEl?.addEventListener("click", async () => {
+  await loadDiagnostics(true);
+});
 
 knowledgeBasePathInputEl?.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
@@ -801,6 +982,7 @@ void loadAppSettings().catch((error) => {
 });
 
 resetProviderForm("api");
+setActiveSettingsSection("knowledge-base");
 
 window.WorkbenchUI = {
   getState: () => ({ ...workbenchState }),

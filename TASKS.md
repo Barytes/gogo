@@ -151,11 +151,13 @@
 
 ### 4. Backlog
 
-- [ ] 在设置面板中加入更明确的 health / diagnostics 信息
-  - [ ] 明确 diagnostics 需要展示哪些运行状态：知识库名称/路径、session namespace、后端模式、Pi RPC 连通性等
-  - [ ] 设计设置面板中的 diagnostics 区块，避免与知识库切换设置混淆
-  - [ ] 评估是否需要展示最近一次错误、超时、上传/ingest 状态，方便排查问题
-  - [ ] 明确哪些信息只做只读展示，哪些信息可以从 diagnostics 直接触发操作（如刷新状态、重连、打开日志目录）
+- [x] 在设置面板中加入更明确的 health / diagnostics 信息
+  - [x] 明确 diagnostics 需要展示哪些运行状态：知识库名称/路径、session namespace、后端模式、Pi RPC 连通性等
+  - [x] 设计设置面板中的 diagnostics 区块，避免与知识库切换设置混淆
+  - [x] 评估是否需要展示最近一次错误、超时、上传/ingest 状态，方便排查问题
+  - [x] 明确哪些信息只做只读展示，哪些信息可以从 diagnostics 直接触发操作（如刷新状态、重连、打开日志目录）
+  - 结论：设置面板已新增独立的“诊断”分组，集中展示知识库路径与目录状态、session namespace / session 目录、Pi RPC 配置与连通性、当前 runtime 模型状态，以及默认 provider/model/thinking 等关键信息。
+  - 结论：当前 diagnostics 以只读信息 + “刷新状态”为主；最近错误信息先通过 Pi runtime 拉取错误兜底展示，不在诊断区直接执行重连或写配置，避免与其他设置项语义混淆。
 
 ## 不再由 gogo-app 承担的任务
 

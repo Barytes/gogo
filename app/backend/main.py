@@ -17,9 +17,13 @@ from pydantic import BaseModel, Field
 from .agent_service import get_agent_backend_status, run_agent_chat, stream_agent_chat, run_session_chat, stream_session_chat
 from .config import (
     delete_model_provider_profile,
+    get_gogo_runtime,
     get_knowledge_base_dir,
     get_knowledge_base_settings,
     get_model_provider_settings,
+    get_pi_extension_paths,
+    get_pi_rpc_session_dir,
+    get_pi_timeout_seconds,
     is_desktop_runtime,
     set_knowledge_base_dir,
     upsert_model_provider_profile,
@@ -68,6 +72,93 @@ ALLOWED_UPLOAD_EXTENSIONS = {
     ".jpeg",
     ".webp",
 }
+
+
+def _safe_path_payload(path: Path) -> dict[str, object]:
+    return {
+        "path": str(path),
+        "exists": path.exists(),
+        "is_dir": path.is_dir(),
+    }
+
+
+def _build_settings_diagnostics() -> dict[str, object]:
+    pool = get_session_pool()
+    kb_dir = get_knowledge_base_dir()
+    kb_settings = get_knowledge_base_settings()
+    agent_status = get_agent_backend_status()
+    provider_settings = get_model_provider_settings()
+    session_dir = get_pi_rpc_session_dir()
+    extension_paths = [str(path) for path in get_pi_extension_paths()]
+
+    runtime_state: dict[str, object] = {}
+    runtime_models: list[dict[str, object]] = []
+    runtime_error = ""
+    try:
+        runtime = pool.get_runtime_options()
+        raw_state = runtime.get("state")
+        raw_models = runtime.get("models")
+        runtime_state = raw_state if isinstance(raw_state, dict) else {}
+        runtime_models = raw_models if isinstance(raw_models, list) else []
+    except Exception as exc:
+        runtime_error = str(exc)
+
+    current_model = runtime_state.get("model") if isinstance(runtime_state.get("model"), dict) else {}
+    model_provider_count = len(
+        {
+            str(item.get("provider") or "").strip()
+            for item in runtime_models
+            if isinstance(item, dict) and str(item.get("provider") or "").strip()
+        }
+    )
+    provider_profiles = provider_settings.get("profiles")
+    provider_profiles = provider_profiles if isinstance(provider_profiles, list) else []
+
+    return {
+        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "health": {
+            "status": "ok",
+            "runtime": get_gogo_runtime(),
+            "desktop_runtime": is_desktop_runtime(),
+            "agent_mode": agent_status.get("mode"),
+            "pi_backend_mode": agent_status.get("pi_backend_mode"),
+            "pi_rpc_available": bool(agent_status.get("pi_rpc_available")),
+            "runtime_options_ok": not runtime_error,
+        },
+        "knowledge_base": {
+            "name": kb_settings.get("name"),
+            "path": kb_settings.get("path"),
+            "session_namespace": kb_settings.get("session_namespace"),
+            "wiki_dir": _safe_path_payload(kb_dir / "wiki"),
+            "raw_dir": _safe_path_payload(kb_dir / "raw"),
+            "inbox_dir": _safe_path_payload(kb_dir / "inbox"),
+        },
+        "sessions": {
+            "pool_count": pool.get_session_count(),
+            "session_dir": _safe_path_payload(session_dir),
+        },
+        "providers": {
+            "profile_count": len(provider_profiles),
+            "managed_count": sum(1 for item in provider_profiles if bool(item.get("managed"))),
+            "oauth_connected_count": sum(1 for item in provider_profiles if bool(item.get("oauth_connected"))),
+            "defaults": provider_settings.get("defaults") or {},
+            "extension_paths": extension_paths,
+        },
+        "pi_runtime": {
+            "command": agent_status.get("pi_command"),
+            "command_path": agent_status.get("pi_command_path"),
+            "timeout_seconds": get_pi_timeout_seconds(),
+            "workdir": agent_status.get("pi_workdir"),
+            "default_thinking_level": agent_status.get("pi_thinking_level"),
+            "current_provider": str(current_model.get("provider") or "").strip() or str(runtime_state.get("provider") or "").strip(),
+            "current_model_id": str(current_model.get("id") or current_model.get("modelId") or runtime_state.get("modelId") or "").strip(),
+            "current_model_name": str(current_model.get("name") or "").strip(),
+            "current_thinking_level": str(runtime_state.get("thinkingLevel") or "").strip(),
+            "available_model_count": len(runtime_models),
+            "available_provider_count": model_provider_count,
+            "runtime_error": runtime_error,
+        },
+    }
 
 
 class NoCacheStaticFiles(StaticFiles):
@@ -333,6 +424,11 @@ def get_app_settings() -> dict[str, object]:
         "knowledge_base": get_knowledge_base_settings(),
         "model_providers": get_model_provider_settings(),
     }
+
+
+@app.get("/api/settings/diagnostics")
+def get_settings_diagnostics() -> dict[str, object]:
+    return _build_settings_diagnostics()
 
 
 @app.patch("/api/settings/knowledge-base")

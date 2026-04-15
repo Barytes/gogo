@@ -192,14 +192,16 @@ code {
 }
 
 .settings-panel {
-  width: min(720px, calc(100vw - 32px));
+  width: min(1040px, calc(100vw - 32px));
   max-height: calc(100vh - 56px);
-  overflow: auto;
+  overflow: hidden;
   padding: 24px 24px 26px;
   border-radius: 28px;
   border: 1px solid rgba(255, 255, 255, 0.7);
   background: rgba(255, 251, 244, 0.98);
   box-shadow: 0 28px 60px rgba(48, 40, 31, 0.18);
+  display: flex;
+  flex-direction: column;
 }
 
 .settings-panel-header {
@@ -215,15 +217,64 @@ code {
   font-family: var(--serif);
 }
 
+.settings-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 22px;
+  min-height: 0;
+  flex: 1;
+}
+
+.settings-sidebar {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.settings-nav-button {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(24, 92, 82, 0.1);
+  border-radius: 18px;
+  background: rgba(24, 92, 82, 0.05);
+  color: var(--text);
+  padding: 14px 16px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.settings-nav-button:hover {
+  border-color: rgba(24, 92, 82, 0.22);
+  transform: translateY(-1px);
+}
+
+.settings-nav-button.active {
+  background: var(--brand);
+  border-color: transparent;
+  color: #f6f3ed;
+  box-shadow: 0 12px 28px rgba(24, 92, 82, 0.16);
+}
+
+.settings-content {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.settings-section-pane {
+  display: none;
+}
+
+.settings-section-pane.active {
+  display: block;
+}
+
 .settings-section {
   display: grid;
   gap: 12px;
-}
-
-.settings-section-divider {
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(24, 92, 82, 0.12);
 }
 
 .settings-section label,
@@ -400,6 +451,46 @@ code {
   color: var(--muted);
   font-size: 0.88rem;
   line-height: 1.5;
+}
+
+.settings-diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settings-diagnostics-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(24, 92, 82, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.settings-diagnostics-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.settings-diagnostics-list {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.settings-diagnostics-list dt {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.settings-diagnostics-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .landing-grid,
@@ -2136,6 +2227,36 @@ body.layout-chat.wiki-hidden .workbench-wiki {
 
   .settings-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-diagnostics-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-diagnostics-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .settings-sidebar {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    overflow: auto;
+    padding-right: 0;
+  }
+
+  .settings-nav-button {
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .settings-content {
+    overflow: visible;
+    padding-right: 0;
   }
 
   .settings-provider-top {
