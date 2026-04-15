@@ -48,13 +48,17 @@
 - [x] 支持 Session 多会话管理（RPC 持久会话）
 - [x] 完成 Agent/Session RPC 重构（F1-F5）
 
-- [ ] 支持 Model Provider 配置
-  - [ ] 明确 RPC mode 的 provider/model 能力边界
-  - [ ] 新增 `MODEL_NAME` 配置
-  - [ ] 将 `MODEL_PROVIDER` 收敛为 provider 选择/约束语义
-  - [ ] 更新 `config.py`：读取并校验 provider/model
-  - [ ] 更新 RPC 链路：`get_available_models` + `set_model`
-  - [ ] 完善错误提示与文档说明
+- [x] 支持 Model Provider 配置
+  - [x] 明确 RPC mode 的 provider/model 能力边界
+  - [x] 新增设置面板中的 Provider 配置入口，支持 API / OAuth 两种模式
+  - [x] 将 Provider 定义改为由 gogo-app 生成并管理 extension，而不是直接写入 Pi 的 `models.json`
+  - [x] 更新 `config.py`：管理 Provider profile、Pi `auth.json` 与 extension 产物
+  - [x] 更新 RPC 链路：Pi RPC 进程启动时自动追加 `--extension <managed-providers.ts>`
+  - [x] 打通前端设置面板保存/删除后对聊天模型菜单的即时刷新
+  - 结论：Provider 定义现在由 gogo-app 生成到 `.gogo/pi-extensions/managed-providers.ts`，并在每次 Pi RPC 启动时通过 `--extension` 自动加载；API key / OAuth token 继续写入 Pi 自己的 `auth.json`，避免把凭证硬编码进 extension。
+  - 结论：extension 不必放在 `~/.pi/agent/extensions/` 下，当前实现选择放在 gogo-app 自己的状态目录 `.gogo/pi-extensions/` 中，属于应用托管资源；这样更便于隔离、回收和后续桌面应用封装。
+  - 结论：Provider 架构已调整为“Provider 定义”和“认证流程”分离。当前 OAuth profile 会显式记录认证方式：桌面版目标路径是通过 Pi CLI `/login` 完成登录与自动刷新，Web 版仅保留“手动导入 token”作为兼容兜底。
+  - 结论：后端已预留 `POST /api/settings/model-providers/{provider_key}/desktop-login` 接口作为未来桌面版登录桥；当前 Web 版会明确返回“尚未接入 Pi CLI”的提示，避免把临时 token 导入方案误当成长期标准架构。
 
 - [x] 评估 `_build_pi_prompt` 中 history 注入是否仍有必要
   - [x] 判断是否可完全依赖 RPC 会话历史
@@ -85,6 +89,12 @@
   - [ ] 保留 Web 版的“手动输入路径 + 最近使用列表”兜底方案
   - [ ] 明确桌面版知识库切换后的 session 隔离与目录迁移策略
   - [ ] 评估桌面版打包、自动更新与跨平台发布成本
+- [ ] 实现桌面版 Pi CLI 登录桥
+  - [ ] 在桌面壳中提供“拉起交互式 `pi` / 执行 `/login`”的能力
+  - [ ] 将 `POST /api/settings/model-providers/{provider_key}/desktop-login` 接到桌面壳桥接层，而不是让前端自己实现 OAuth
+  - [ ] 登录完成后刷新 Provider 状态、模型列表与默认模型信息
+  - [ ] 明确 Pi CLI 登录窗口、失败提示和取消流程
+  - [ ] 仅把 Web 版的“手动导入 token”保留为兼容兜底，不再作为长期主路径
 
 ### 3. 应用体验
 
@@ -141,8 +151,11 @@
 
 ### 4. Backlog
 
-- [ ] 评估 gogo-app 是否需要保留应用层检索辅助能力
-- [ ] 评估 gogo-app 是否需要暴露更明确的 health / diagnostics 页面
+- [ ] 在设置面板中加入更明确的 health / diagnostics 信息
+  - [ ] 明确 diagnostics 需要展示哪些运行状态：知识库名称/路径、session namespace、后端模式、Pi RPC 连通性等
+  - [ ] 设计设置面板中的 diagnostics 区块，避免与知识库切换设置混淆
+  - [ ] 评估是否需要展示最近一次错误、超时、上传/ingest 状态，方便排查问题
+  - [ ] 明确哪些信息只做只读展示，哪些信息可以从 diagnostics 直接触发操作（如刷新状态、重连、打开日志目录）
 
 ## 不再由 gogo-app 承担的任务
 

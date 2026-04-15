@@ -1,6 +1,6 @@
 # gogo-app Architecture
 
-**最后更新**: 2026-04-14
+**最后更新**: 2026-04-15
 
 > 本文档描述 `gogo-app` 这个应用产品本身的职责、边界与当前前后端架构。  
 > 项目级关系见 [gogo-project-architecture.md](gogo-project-architecture.md)。  
@@ -120,6 +120,32 @@ Browser
 - 当前为 RPC-only 架构
 
 更细的 session 机制见 [session-management.md](session-management.md)。
+
+## 5.1 Model Provider 与认证
+
+当前 `gogo-app` 对 Pi 模型接入采用“两层拆分”：
+
+- `Provider 定义层`：由 `gogo-app` 托管，保存为 app 自己的 profile，并生成 `.gogo/pi-extensions/managed-providers.ts`
+- `认证层`：尽量交给 Pi 自己管理，凭证继续写入 `~/.pi/agent/auth.json`
+
+这样做的原因是：
+
+- `gogo-app` 更擅长管理应用级设置、知识库隔离和 UI
+- Pi 自己更适合管理 provider 登录、token 刷新和模型能力发现
+- 未来桌面版接入时，可以直接复用 Pi CLI 的 `/login`，而不是在 `gogo-app` 里重复造一套 OAuth 登录器
+
+当前策略：
+
+- `API Provider`：由 `gogo-app` 生成 extension 定义，API key 写入 Pi 的 `auth.json`
+- `OAuth Provider`：
+  - 桌面版目标主路径：通过 Pi CLI `/login` 完成登录和自动刷新
+  - 当前 Web 版兜底：允许在设置面板手动导入 token，便于兼容测试和过渡
+
+为此，后端已经预留了稳定的登录桥接口：
+
+- `POST /api/settings/model-providers/{provider_key}/desktop-login`
+
+当前在 Web 运行时，这个接口只返回“桌面版尚未接入”的提示；未来桌面壳接入后，前端不需要改交互路径，只需要把这个接口接到“拉起交互式 Pi CLI / 执行 `/login`”的桥接实现上。
 
 ## 6. 当前实现边界
 

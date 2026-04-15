@@ -8,6 +8,7 @@ from typing import Any, AsyncIterator
 from .config import (
     get_pi_command,
     get_pi_command_path,
+    get_pi_extension_args,
     get_pi_thinking_level,
     get_pi_timeout_seconds,
     get_pi_workdir,
@@ -21,6 +22,10 @@ from .wiki_service import search_pages
 logger = logging.getLogger(__name__)
 PI_TIMEOUT_USER_MESSAGE = "Pi 回复超时，本次请求已自动停止。你可以重试，或切换会话继续提问。"
 PI_INTERRUPTED_USER_MESSAGE = "Pi 回复异常中断，本次请求已自动停止。你可以重试，或切换会话继续提问。"
+
+
+def _pi_rpc_extra_args(*args: str) -> list[str]:
+    return [*args, *get_pi_extension_args()]
 
 
 def get_agent_backend_status() -> dict[str, Any]:
@@ -351,7 +356,7 @@ async def _run_pi_rpc_agent_chat_async(
             command_path=prepared["command_path"],
             cwd=prepared["cwd"],
             timeout_seconds=prepared["timeout_seconds"],
-            extra_args=["--no-session"],
+            extra_args=_pi_rpc_extra_args("--no-session"),
         ) as rpc_client:
             client = rpc_client
             await rpc_client.get_state(
@@ -480,7 +485,7 @@ async def _stream_pi_rpc_chat(
             command_path=prepared["command_path"],
             cwd=prepared["cwd"],
             timeout_seconds=prepared["timeout_seconds"],
-            extra_args=["--no-session"],
+            extra_args=_pi_rpc_extra_args("--no-session"),
         ) as rpc_client:
             client = rpc_client
             await rpc_client.get_state(

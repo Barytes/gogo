@@ -15,7 +15,15 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .agent_service import get_agent_backend_status, run_agent_chat, stream_agent_chat, run_session_chat, stream_session_chat
-from .config import get_knowledge_base_dir, get_knowledge_base_settings, set_knowledge_base_dir
+from .config import (
+    delete_model_provider_profile,
+    get_knowledge_base_dir,
+    get_knowledge_base_settings,
+    get_model_provider_settings,
+    is_desktop_runtime,
+    set_knowledge_base_dir,
+    upsert_model_provider_profile,
+)
 from .raw_service import (
     get_raw_file,
     get_raw_file_path,
@@ -113,6 +121,25 @@ class UpdateSessionSettingsRequest(BaseModel):
 
 class UpdateKnowledgeBaseRequest(BaseModel):
     path: str = Field(..., min_length=1, description="本地知识库路径")
+
+
+class UpsertModelProviderRequest(BaseModel):
+    config_kind: str = Field(..., description="Provider 配置类型：api 或 oauth")
+    auth_mode: str = Field(default="", description="OAuth 认证方式：desktop-pi-login 或 manual-tokens")
+    provider_key: str = Field(..., min_length=1, description="Provider 标识")
+    display_name: str = Field(default="", description="展示名称")
+    base_url: str = Field(default="", description="Provider 基础 URL")
+    api_type: str = Field(default="", description="Provider API 类型")
+    models_text: str = Field(default="", description="模型列表文本")
+    auth_header: bool = Field(default=False, description="是否自动附加 Bearer Authorization")
+    api_key: str = Field(default="", description="API key")
+    clear_secret: bool = Field(default=False, description="是否清除已保存的 API key")
+    access_token: str = Field(default="", description="OAuth access token")
+    refresh_token: str = Field(default="", description="OAuth refresh token")
+    expires_at: int | None = Field(default=None, description="OAuth 过期时间（毫秒时间戳）")
+    account_id: str = Field(default="", description="OAuth accountId（可选）")
+    email: str = Field(default="", description="OAuth email（可选）")
+    project_id: str = Field(default="", description="OAuth projectId（可选）")
 
 
 @asynccontextmanager
@@ -304,6 +331,7 @@ def healthcheck() -> dict[str, object]:
 def get_app_settings() -> dict[str, object]:
     return {
         "knowledge_base": get_knowledge_base_settings(),
+        "model_providers": get_model_provider_settings(),
     }
 
 
@@ -319,6 +347,50 @@ def update_knowledge_base(request: UpdateKnowledgeBaseRequest) -> dict[str, obje
         "knowledge_base": settings,
         "detail": "知识库已切换，会话目录已按知识库隔离。",
     }
+
+
+@app.post("/api/settings/model-providers")
+def save_model_provider(request: UpsertModelProviderRequest) -> dict[str, object]:
+    try:
+        settings = upsert_model_provider_profile(request.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {
+        "success": True,
+        "model_providers": settings,
+        "detail": "Provider 配置已保存，后续新建的 Pi RPC 进程会自动加载对应 extension。",
+    }
+
+
+@app.delete("/api/settings/model-providers/{provider_key}")
+def remove_model_provider(provider_key: str) -> dict[str, object]:
+    try:
+        settings = delete_model_provider_profile(provider_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {
+        "success": True,
+        "provider_key": provider_key,
+        "model_providers": settings,
+        "detail": "Provider 配置已删除。",
+    }
+
+
+@app.post("/api/settings/model-providers/{provider_key}/desktop-login")
+def start_model_provider_desktop_login(provider_key: str) -> dict[str, object]:
+    if not is_desktop_runtime():
+        raise HTTPException(
+            status_code=501,
+            detail="当前仍是 Web 版 gogo-app，暂时不能直接拉起 Pi CLI 登录。后续桌面版会复用这个接口触发 `pi` 的登录流程。",
+        )
+    raise HTTPException(
+        status_code=501,
+        detail=f"Provider `{provider_key}` 的桌面版 Pi CLI 登录桥接尚未实现。",
+    )
 
 
 @app.get("/api/chat/suggestions")

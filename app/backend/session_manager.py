@@ -21,6 +21,7 @@ from typing import Any, AsyncIterator
 
 from .config import (
     get_pi_command_path,
+    get_pi_extension_args,
     get_pi_rpc_session_dir,
     get_pi_thinking_level,
     get_pi_timeout_seconds,
@@ -36,6 +37,10 @@ PI_INTERRUPTED_USER_MESSAGE = "Pi 回复异常中断，本次请求已自动停�
 
 REGISTRY_FILENAME = "gogo-session-registry.json"
 APP_TURNS_DIRNAME = "gogo-session-turns"
+
+
+def _pi_rpc_extra_args(*args: str) -> list[str]:
+    return [*args, *get_pi_extension_args()]
 
 
 def _run_coro_sync(coro):
@@ -431,7 +436,7 @@ class SessionPool:
                 command_path=command_path,
                 cwd=session.workdir,
                 timeout_seconds=get_pi_timeout_seconds(),
-                extra_args=["--session-dir", str(session_dir)],
+                extra_args=_pi_rpc_extra_args("--session-dir", str(session_dir)),
             ) as client:
                 await client.get_state(request_id=f"{session.session_id}:bootstrap:state")
                 await client.new_session(request_id=f"{session.session_id}:bootstrap:new")
@@ -488,7 +493,7 @@ class SessionPool:
                 command_path=command_path,
                 cwd=str(get_pi_workdir()),
                 timeout_seconds=get_pi_timeout_seconds(),
-                extra_args=["--session-dir", str(get_pi_rpc_session_dir())],
+                extra_args=_pi_rpc_extra_args("--session-dir", str(get_pi_rpc_session_dir())),
             ) as client:
                 state = await client.get_state(request_id="models:state")
                 models = await client.get_available_models(request_id="models:list")
@@ -527,7 +532,7 @@ class SessionPool:
                 command_path=command_path,
                 cwd=session.workdir,
                 timeout_seconds=get_pi_timeout_seconds(),
-                extra_args=["--session-dir", str(get_pi_rpc_session_dir())],
+                extra_args=_pi_rpc_extra_args("--session-dir", str(get_pi_rpc_session_dir())),
             ) as client:
                 await client.switch_session(
                     session_path=session.session_file,
@@ -870,7 +875,7 @@ class SessionPool:
                 command_path=command_path,
                 cwd=session.workdir,
                 timeout_seconds=get_pi_timeout_seconds(),
-                extra_args=["--session-dir", str(get_pi_rpc_session_dir())],
+                extra_args=_pi_rpc_extra_args("--session-dir", str(get_pi_rpc_session_dir())),
             ) as rpc_client:
                 client = rpc_client
                 session.active_rpc_client = rpc_client
@@ -1175,7 +1180,7 @@ class SessionPool:
                     command_path=command_path,
                     cwd=session.workdir,
                     timeout_seconds=get_pi_timeout_seconds(),
-                    extra_args=["--session-dir", str(get_pi_rpc_session_dir())],
+                    extra_args=_pi_rpc_extra_args("--session-dir", str(get_pi_rpc_session_dir())),
                 ) as client:
                     await client.switch_session(
                         session_path=session.session_file,

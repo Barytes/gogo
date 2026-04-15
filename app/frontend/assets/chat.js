@@ -1230,6 +1230,7 @@ async function abortCurrentReply() {
 window.ChatWorkbench = {
   focusInput: focusChatInput,
   injectPrompt,
+  reloadPiOptions,
 };
 
 messagesEl?.addEventListener("scroll", () => {
@@ -2072,6 +2073,13 @@ async function fetchPiOptions() {
   return response.json();
 }
 
+async function reloadPiOptions() {
+  const payload = await fetchPiOptions();
+  applyPiOptions(payload);
+  refreshChatControls();
+  return payload;
+}
+
 function applyPiOptions(payload) {
   const models = Array.isArray(payload?.models) ? payload.models.map(normalizeModelRecord).filter(Boolean) : [];
   availableModels = models;
@@ -2682,7 +2690,7 @@ thinkingButtonEl?.addEventListener("click", () => {
 async function bootstrapChat() {
   applySessionSidebarState(loadSessionSidebarState());
   try {
-    applyPiOptions(await fetchPiOptions());
+    await reloadPiOptions();
   } catch (error) {
     console.error("Failed to load Pi options:", error);
     appendMessage("assistant", `加载模型与思考水平选项失败：${error.message}`);
