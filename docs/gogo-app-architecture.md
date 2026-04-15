@@ -25,6 +25,9 @@
 - Chat 问答与流式响应
 - 多会话管理
 - 本地工作台式交互体验
+- 运行时切换知识库
+- 设置面板中的 Provider / diagnostics 管理
+- 上传文件到知识库 `inbox/` 并驱动 ingest 工作流
 
 ### 2.2 系统侧能力
 
@@ -32,6 +35,8 @@
 - Pi RPC 模型接入
 - 会话状态与历史恢复
 - 本地知识库目录读取与搜索 API
+- Model Provider profile 与 Pi extension 托管
+- 按知识库隔离的 session 存储
 
 ## 3. 边界
 
@@ -67,7 +72,10 @@
 
 - 单页工作台布局
 - `Wiki` / `Chat` 模式切换
+- 顶部知识库标题与设置面板
 - 会话列表、新建、删除、切换
+- 聊天框中的模型 / 思考切换
+- 文件上传与 Inbox 浮窗
 - 流式事件消费与消息渲染
 - Wiki/Raw 内容展示
 
@@ -90,6 +98,8 @@
 - Session 生命周期管理
 - Pi RPC 通讯
 - knowledge-base 内容读取与搜索
+- settings / diagnostics / inbox API
+- Provider profile 与托管 extension 生成
 
 ## 4.3 运行链路
 
@@ -116,7 +126,8 @@ Browser
 
 - 会话目录：`.gogo/pi-rpc-sessions/`
 - registry：`gogo-session-registry.json`
-- 消息历史：Pi 原生 session JSONL
+- 应用层富历史：`gogo-session-turns/*.jsonl`
+- 消息历史基础：Pi 原生 session JSONL
 - 当前为 RPC-only 架构
 
 更细的 session 机制见 [session-management.md](session-management.md)。
@@ -147,6 +158,30 @@ Browser
 
 当前在 Web 运行时，这个接口只返回“桌面版尚未接入”的提示；未来桌面壳接入后，前端不需要改交互路径，只需要把这个接口接到“拉起交互式 Pi CLI / 执行 `/login`”的桥接实现上。
 
+## 5.2 设置、Inbox 与 diagnostics
+
+当前 `gogo-app` 的设置面板已经收敛成 3 个分组：
+
+- `知识库`
+- `模型与 Provider`
+- `诊断`
+
+其中：
+
+- 知识库分组负责切换本地 knowledge-base 路径和展示最近使用列表
+- 模型与 Provider 分组负责管理 Provider profile，以及 Web 版的过渡态认证配置
+- 诊断分组负责集中展示知识库目录状态、session namespace、Pi runtime、provider 状态
+
+聊天输入框区域还额外承载了两个和知识库工作流强相关的能力：
+
+- 左下角模型 / 思考切换
+- 右下角 `Inbox` 浮窗
+
+`Inbox` 的定位不是单纯“上传成功提示”，而是：
+
+- 当前知识库 `inbox/` 的可持续可见入口
+- 文件上传、拖拽上传、删除、刷新和 ingest 提示词插入的统一工作台
+
 ## 6. 当前实现边界
 
 已实现：
@@ -155,6 +190,9 @@ Browser
 - Wiki/Raw 浏览
 - Pi RPC 聊天主链路
 - 多会话与历史恢复
+- 运行时知识库切换
+- Provider 设置面板与 diagnostics
+- Inbox 上传 / 删除 / ingest 联动
 
 未实现：
 
@@ -174,5 +212,6 @@ Browser
 - [agent-architecture.md](agent-architecture.md) - gogo-app 中 Agent 后端实现细节
 - [session-management.md](session-management.md) - gogo-app 中 Session 管理与恢复机制
 - [frontend-workbench-elements.md](frontend-workbench-elements.md) - gogo-app 前端页面元素、状态与交互实现说明
+- [documentation-cleanup-audit-2026-04-15.md](documentation-cleanup-audit-2026-04-15.md) - 当前文档覆盖性审计结果与本轮清理范围
 - [desktop-packaging-options.md](desktop-packaging-options.md) - gogo-app 桌面应用封装方案评估与推荐路线
 - [electron-packaging-guide.md](electron-packaging-guide.md) - gogo-app Electron 封装实施指南

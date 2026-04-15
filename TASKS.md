@@ -167,12 +167,14 @@
 
 ### 4. Backlog
 
-- [ ] 做一轮文档清理与覆盖性审计
-  - [ ] 检查 `docs/` 中哪些文档内容已经过时，不符合当前代码实现
-  - [ ] 检查哪些当前代码实现尚未记录在文档中，尤其是近期新增的设置面板、Inbox、Provider、diagnostics、会话恢复等能力
-  - [ ] 基于 `docs/code-doc-mapping.md` 和实际代码结构，补齐缺失文档入口或更新映射关系
-  - [ ] 区分“需要修正文档”与“需要补代码注释/架构说明”的问题，避免只做表面同步
-  - [ ] 产出一份清理结果：哪些文档已更新、哪些仍待补、哪些可以合并或废弃
+- [x] 做一轮文档清理与覆盖性审计
+  - [x] 检查 `docs/` 中哪些文档内容已经过时，不符合当前代码实现
+  - [x] 检查哪些当前代码实现尚未记录在文档中，尤其是近期新增的设置面板、Inbox、Provider、diagnostics、会话恢复等能力
+  - [x] 基于 `docs/code-doc-mapping.md` 和实际代码结构，补齐缺失文档入口或更新映射关系
+  - [x] 区分“需要修正文档”与“需要补代码注释/架构说明”的问题，避免只做表面同步
+  - [x] 产出一份清理结果：哪些文档已更新、哪些仍待补、哪些可以合并或废弃
+  - 结论：本轮已重点更新 `docs/frontend-workbench-elements.md`、`docs/session-management.md`、`docs/agent-architecture.md` 与 `docs/gogo-app-architecture.md`，补齐设置面板侧边栏、Provider/diagnostics、Inbox、富历史恢复、单 reader task Pi RPC 等近期实现说明。
+  - 结论：`docs/code-doc-mapping.md` 已新增 `docs/gogo-app-architecture.md` 的代码映射；审计结果已沉淀到 `docs/documentation-cleanup-audit-2026-04-15.md`，当前剩余待补的主要是未来桌面版实现文档，而不是 Web 版已落地能力的缺口。
 - [x] 在设置面板中加入更明确的 health / diagnostics 信息
   - [x] 明确 diagnostics 需要展示哪些运行状态：知识库名称/路径、session namespace、后端模式、Pi RPC 连通性等
   - [x] 设计设置面板中的 diagnostics 区块，避免与知识库切换设置混淆
