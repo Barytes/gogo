@@ -1,6 +1,6 @@
 # Docs Index
 
-**最后更新**: 2026-04-15
+**最后更新**: 2026-04-16
 
 > 说明：本索引仅覆盖 `docs/` 根目录文档，不包含 `docs/pi/`。
 
@@ -13,8 +13,8 @@
 
 - [gogo-project-architecture.md](gogo-project-architecture.md) - gogo 项目总览：gogo-app / gogo-server / gogo-client / knowledge-base 的关系
 - [gogo-app-architecture.md](gogo-app-architecture.md) - gogo-app 的职责、边界与前后端架构
-- [desktop-packaging-options.md](desktop-packaging-options.md) - gogo-app 桌面应用封装方案评估（Electron / Tauri / Wails / 过渡方案）
-- [electron-packaging-guide.md](electron-packaging-guide.md) - gogo-app Electron 封装指南（窗口、FastAPI 托管、原生桥接）
+- [desktop-packaging-options.md](desktop-packaging-options.md) - gogo-app 桌面应用封装方案评估与当前路线说明
+- [tauri-migration-plan.md](tauri-migration-plan.md) - gogo-app 当前 Tauri 桌面壳实现、目标架构与后续迁移顺序
 - [gogo-client-architecture.md](gogo-client-architecture.md) - gogo-client 的职责、边界与同步端架构设计
 - [gogo-server-architecture.md](gogo-server-architecture.md) - gogo-server 的职责、边界与聚合端架构设计
 

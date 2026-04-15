@@ -1,8 +1,20 @@
 {
   "name": "gogo-app",
   "private": true,
+  "version": "0.1.0",
   "type": "module",
+  "scripts": {
+    "backend:dev": "sh ./scripts/tauri-backend-dev.sh",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build"
+  },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "latest"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  },
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
   }
 }

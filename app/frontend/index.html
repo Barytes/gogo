@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Research KB MVP</title>
-    <link rel="stylesheet" href="/assets/styles.css?v=20260415-11" />
+    <link rel="stylesheet" href="/assets/styles.css?v=20260415-12" />
   </head>
   <body>
     <div class="site-shell app-shell">
@@ -276,6 +276,9 @@
 		                    当前知识库名称会显示在左上角。切换后会自动隔离该知识库对应的会话目录，不会与其他知识库共用会话历史。
 		                  </p>
 		                  <div class="settings-actions">
+		                    <button id="pick-knowledge-base-path" class="button button-secondary hidden" type="button">
+		                      选择目录
+		                    </button>
 		                    <button id="apply-knowledge-base-path" class="button button-primary" type="button">
 		                      切换知识库
 		                    </button>
@@ -423,8 +426,9 @@
 		      </div>
 	    </div>
 
-	    <script src="/assets/workbench.js?v=20260415-11"></script>
-	    <script src="/assets/wiki.js?v=20260415-11"></script>
-	    <script src="/assets/chat.js?v=20260415-11"></script>
+	    <script src="/assets/desktop-bridge.js?v=20260416-01"></script>
+	    <script src="/assets/workbench.js?v=20260416-01"></script>
+	    <script src="/assets/wiki.js?v=20260415-12"></script>
+	    <script src="/assets/chat.js?v=20260415-12"></script>
   </body>
 </html>

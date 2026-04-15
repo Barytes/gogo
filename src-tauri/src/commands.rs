@@ -1,0 +1,63 @@
+use std::process::Command;
+
+use serde::Serialize;
+use tauri::{AppHandle, State};
+use tauri_plugin_dialog::DialogExt;
+
+use crate::backend::BackendState;
+
+#[derive(Debug, Serialize)]
+pub struct DesktopRuntimeInfo {
+    desktop_runtime: bool,
+    backend_url: String,
+    platform: String,
+}
+
+#[tauri::command]
+pub fn desktop_runtime_info(state: State<'_, BackendState>) -> DesktopRuntimeInfo {
+    DesktopRuntimeInfo {
+        desktop_runtime: true,
+        backend_url: state.backend_url.clone(),
+        platform: std::env::consts::OS.to_string(),
+    }
+}
+
+#[tauri::command]
+pub async fn select_knowledge_base_directory(app: AppHandle) -> Result<Option<String>, String> {
+    let Some(file_path) = app.dialog().file().blocking_pick_folder() else {
+        return Ok(None);
+    };
+
+    let path = file_path
+        .into_path()
+        .map_err(|error| format!("无法解析目录路径：{error}"))?;
+
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
+pub fn open_path(path: String) -> Result<(), String> {
+    let target = path.trim();
+    if target.is_empty() {
+        return Err("路径不能为空。".to_string());
+    }
+
+    let mut command = if cfg!(target_os = "macos") {
+        let mut command = Command::new("open");
+        command.arg(target);
+        command
+    } else if cfg!(target_os = "windows") {
+        let mut command = Command::new("explorer");
+        command.arg(target);
+        command
+    } else {
+        let mut command = Command::new("xdg-open");
+        command.arg(target);
+        command
+    };
+
+    command
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("打开路径失败：{error}"))
+}

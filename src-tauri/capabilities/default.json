@@ -1,0 +1,10 @@
+{
+  "identifier": "default",
+  "description": "Default capability set for the gogo-app desktop window.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}

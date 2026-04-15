@@ -1,6 +1,6 @@
 # gogo-app Architecture
 
-**最后更新**: 2026-04-15
+**最后更新**: 2026-04-16
 
 > 本文档描述 `gogo-app` 这个应用产品本身的职责、边界与当前前后端架构。  
 > 项目级关系见 [gogo-project-architecture.md](gogo-project-architecture.md)。  
@@ -214,4 +214,4 @@ Browser
 - [frontend-workbench-elements.md](frontend-workbench-elements.md) - gogo-app 前端页面元素、状态与交互实现说明
 - [documentation-cleanup-audit-2026-04-15.md](documentation-cleanup-audit-2026-04-15.md) - 当前文档覆盖性审计结果与本轮清理范围
 - [desktop-packaging-options.md](desktop-packaging-options.md) - gogo-app 桌面应用封装方案评估与推荐路线
-- [electron-packaging-guide.md](electron-packaging-guide.md) - gogo-app Electron 封装实施指南
+- [tauri-migration-plan.md](tauri-migration-plan.md) - 当前 Tauri 桌面壳实现与后续迁移顺序

@@ -1,0 +1,18 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "gogo-app",
+  "version": "0.1.0",
+  "identifier": "space.aibuilders.gogoapp",
+  "build": {
+    "beforeDevCommand": "npm run backend:dev",
+    "devUrl": "http://127.0.0.1:8000",
+    "frontendDist": "../app/frontend"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": []
+  },
+  "bundle": {
+    "active": false
+  }
+}

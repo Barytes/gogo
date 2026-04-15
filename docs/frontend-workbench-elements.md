@@ -1,6 +1,6 @@
 # Frontend Workbench Elements
 
-**最后更新**: 2026-04-15
+**最后更新**: 2026-04-16
 
 > 本文档说明 `gogo-app` 前端页面中各个主要元素的职责、状态来源与实现位置。  
 > 目标不是解释后端 RPC，而是回答“页面上这个区域/按钮是干什么的、由谁实现、和谁联动”。
@@ -84,6 +84,7 @@
 主要元素：
 
 - `#knowledge-base-path-input`
+- `#pick-knowledge-base-path`
 - `#apply-knowledge-base-path`
 - `#knowledge-base-recent-list`
 - `#knowledge-base-settings-feedback`
@@ -91,6 +92,7 @@
 功能：
 
 - 显示当前知识库路径
+- 在桌面版运行时调用系统目录选择器
 - 手动切换本地知识库目录
 - 展示最近使用的知识库列表
 - 显示切换成功/失败反馈
@@ -99,6 +101,12 @@
 
 - `GET /api/settings`
 - `PATCH /api/settings/knowledge-base`
+
+桌面版适配：
+
+- 如果存在 `window.GogoDesktop`，会显示“选择目录”按钮
+- 当前桥接实现由 `app/frontend/assets/desktop-bridge.js` 提供
+- Tauri 版会通过 `invoke("select_knowledge_base_directory")` 拉起原生目录选择器，再复用已有知识库切换 API
 
 ### 4.3 Model Provider 设置区
 

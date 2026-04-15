@@ -4,7 +4,7 @@
 > 项目级架构参考：[gogo-project-architecture.md](docs/gogo-project-architecture.md)  
 > 应用架构参考：[gogo-app-architecture.md](docs/gogo-app-architecture.md)
 
-**最后更新**: 2026-04-15
+**最后更新**: 2026-04-16
 
 ## 相关任务文档
 
@@ -39,6 +39,12 @@
 | Wiki 浏览 | `app/frontend/assets/wiki.js` | ✅ 列表、搜索、详情、Markdown 渲染 |
 | Chat | `app/frontend/assets/chat.js` | ✅ 流式消费、工作日志显示 |
 | 样式 | `app/frontend/assets/styles.css` | ✅ 基础样式 |
+
+#### 桌面化状态
+
+- 当前桌面版基于 Tauri
+- 桌面开发入口：`npm run desktop:dev`
+- 当前桌面化方案与边界见 `docs/tauri-migration-plan.md`
 
 ## gogo-app 任务
 
@@ -83,14 +89,18 @@
 
 ### 2. 桌面应用封装
 
-- [ ] 封装成 Electron 桌面应用
-  - [ ] 按 `docs/electron-packaging-guide.md` 搭建 Electron 壳目录与开发脚手架
-  - [ ] 启动并托管本地 FastAPI 子进程，由 Electron 窗口加载本地服务页面
-  - [ ] 通过 preload / IPC 暴露桌面运行时能力，而不是让前端直接依赖 Node API
-  - [ ] 打通原生“选择本地知识库目录”能力，并将绝对路径安全传给前端设置面板
-  - [ ] 保留 Web 版的“手动输入路径 + 最近使用列表”兜底方案
-  - [ ] 明确桌面版知识库切换后的 session 隔离与目录迁移策略
-  - [ ] 明确 Electron 版打包、自动更新与跨平台发布成本
+- [x] 从 Electron 迁移到 Tauri 桌面壳
+  - [x] 移除 Electron 可执行代码与旧安装链
+  - [x] 清理旧 Electron 历史文档与仓库内说明引用
+  - [x] 在 `TASKS.md` 中补充 Tauri 迁移任务和当前边界
+  - [x] 新增 `src-tauri/` 基础目录、`Cargo.toml`、`tauri.conf.json`、capability 与构建脚本
+  - [x] 用 Tauri 主进程替代原 Electron 壳，并在启动时托管本地 FastAPI 子进程
+  - [x] 启动后探活 `/api/health`，再创建原生窗口并加载本地工作台页面
+  - [x] 通过 Tauri command 恢复桌面运行时 bridge，而不是让前端直接依赖 Node API
+  - [x] 恢复原生“选择本地知识库目录”能力，并保留 Web 版“手动输入路径 + 最近使用列表”兜底方案
+  - [x] 更新 README / docs / code-doc-mapping，明确后续桌面化路线已经转为 Tauri
+  - 结论：仓库已新增 `src-tauri/src/main.rs`、`src-tauri/src/backend.rs`、`src-tauri/src/commands.rs` 与基础 `tauri.conf.json`；Tauri 启动时会自动拉起本地 FastAPI、探活 `/api/health` 并加载本地服务页面。
+  - 结论：前端知识库设置区已重新接回桌面版原生目录选择器；桥接来源从 Electron preload 改为 `app/frontend/assets/desktop-bridge.js + Tauri invoke`。
 - [ ] 实现桌面版 Pi CLI 登录桥
   - [ ] 在桌面壳中提供“拉起交互式 `pi` / 执行 `/login`”的能力
   - [ ] 将 `POST /api/settings/model-providers/{provider_key}/desktop-login` 接到桌面壳桥接层，而不是让前端自己实现 OAuth
@@ -202,6 +212,7 @@
 
 | 日期 | 变更 |
 |------|------|
+| 2026-04-16 | 完成 Tauri 第一阶段迁移，并清理旧 Electron 文档与过期任务说明：新增 `src-tauri/`、Tauri 后端启动器、桌面 bridge 与目录选择能力；同步 README / TASKS / docs 索引 |
 | 2026-04-14 | 新增待排查问题：长回复可能被提前中断；`PiRpcClient.abort()` 与流式读取并发时出现 `read() called while another coroutine is already waiting for incoming data` |
 | 2026-04-14 | 将无 session 单次聊天迁移到 `/api/legacy/chat` 与 `/api/legacy/chat/stream`，主 `/api/chat*` 收敛为 session-only；完成固定检索与 `consulted_pages` 评估：两者仅保留为 legacy no-session 兼容能力与应用层 UI 元数据 |
 | 2026-04-14 | 完成 `_build_pi_prompt` history 注入评估：session 链路完全依赖 RPC 会话历史；无 session 单次聊天继续保留 prompt 级 history 兜底 |

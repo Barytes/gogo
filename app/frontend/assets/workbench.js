@@ -16,6 +16,7 @@ const knowledgeBasePathInputEl = document.querySelector("#knowledge-base-path-in
 const knowledgeBaseRecentListEl = document.querySelector("#knowledge-base-recent-list");
 const knowledgeBaseFeedbackEl = document.querySelector("#knowledge-base-settings-feedback");
 const applyKnowledgeBasePathButtonEl = document.querySelector("#apply-knowledge-base-path");
+const pickKnowledgeBasePathButtonEl = document.querySelector("#pick-knowledge-base-path");
 
 const providerProfileListEl = document.querySelector("#provider-profile-list");
 const providerProfileEmptyEl = document.querySelector("#provider-profile-empty");
@@ -68,6 +69,20 @@ const diagnosticsState = {
   loadedAt: 0,
   data: null,
 };
+const desktopBridge =
+  typeof window !== "undefined" &&
+  window.GogoDesktop &&
+  typeof window.GogoDesktop.isDesktopRuntime === "function"
+    ? window.GogoDesktop
+    : null;
+
+function isDesktopRuntime() {
+  try {
+    return Boolean(desktopBridge?.isDesktopRuntime?.());
+  } catch (_error) {
+    return false;
+  }
+}
 
 function saveWorkbenchState() {
   try {
@@ -365,6 +380,9 @@ function renderKnowledgeBaseSettings() {
   }
   if (knowledgeBasePathInputEl) {
     knowledgeBasePathInputEl.value = knowledgeBase?.path || "";
+  }
+  if (pickKnowledgeBasePathButtonEl) {
+    pickKnowledgeBasePathButtonEl.classList.toggle("hidden", !isDesktopRuntime());
   }
   if (!knowledgeBaseRecentListEl) {
     return;
@@ -771,16 +789,22 @@ function closeSettingsPanel() {
   setDiagnosticsFeedback("");
 }
 
-async function applyKnowledgeBasePath() {
-  const nextPath = String(knowledgeBasePathInputEl?.value || "").trim();
+async function applyKnowledgeBasePath(pathOverride = "") {
+  const nextPath = String(pathOverride || knowledgeBasePathInputEl?.value || "").trim();
   if (!nextPath) {
     setKnowledgeBaseFeedback("请输入知识库路径。", true);
     return;
+  }
+  if (knowledgeBasePathInputEl) {
+    knowledgeBasePathInputEl.value = nextPath;
   }
   if (!applyKnowledgeBasePathButtonEl) {
     return;
   }
   applyKnowledgeBasePathButtonEl.disabled = true;
+  if (pickKnowledgeBasePathButtonEl) {
+    pickKnowledgeBasePathButtonEl.disabled = true;
+  }
   setKnowledgeBaseFeedback("正在切换知识库...");
   try {
     const response = await fetch("/api/settings/knowledge-base", {
@@ -800,6 +824,38 @@ async function applyKnowledgeBasePath() {
     setKnowledgeBaseFeedback(`切换失败：${error.message}`, true);
   } finally {
     applyKnowledgeBasePathButtonEl.disabled = false;
+    if (pickKnowledgeBasePathButtonEl) {
+      pickKnowledgeBasePathButtonEl.disabled = false;
+    }
+  }
+}
+
+async function pickKnowledgeBasePath() {
+  if (!isDesktopRuntime() || !desktopBridge?.selectKnowledgeBaseDirectory) {
+    setKnowledgeBaseFeedback("当前不是桌面版运行时，暂时不能直接调用系统目录选择器。", true);
+    return;
+  }
+  if (pickKnowledgeBasePathButtonEl) {
+    pickKnowledgeBasePathButtonEl.disabled = true;
+  }
+  setKnowledgeBaseFeedback("正在打开系统目录选择器...");
+  try {
+    const result = await desktopBridge.selectKnowledgeBaseDirectory();
+    if (result?.canceled) {
+      setKnowledgeBaseFeedback("已取消目录选择。");
+      return;
+    }
+    const nextPath = String(result?.path || "").trim();
+    if (!nextPath) {
+      throw new Error("目录选择器没有返回有效路径。");
+    }
+    await applyKnowledgeBasePath(nextPath);
+  } catch (error) {
+    setKnowledgeBaseFeedback(`选择目录失败：${error.message}`, true);
+  } finally {
+    if (pickKnowledgeBasePathButtonEl) {
+      pickKnowledgeBasePathButtonEl.disabled = false;
+    }
   }
 }
 
@@ -922,7 +978,12 @@ async function deleteProviderProfile(providerKey) {
 
 openSettingsButtonEl?.addEventListener("click", openSettingsPanel);
 closeSettingsButtonEl?.addEventListener("click", closeSettingsPanel);
-applyKnowledgeBasePathButtonEl?.addEventListener("click", applyKnowledgeBasePath);
+applyKnowledgeBasePathButtonEl?.addEventListener("click", () => {
+  void applyKnowledgeBasePath();
+});
+pickKnowledgeBasePathButtonEl?.addEventListener("click", () => {
+  void pickKnowledgeBasePath();
+});
 providerModeApiButtonEl?.addEventListener("click", () => applyProviderMode("api"));
 providerModeOauthButtonEl?.addEventListener("click", () => applyProviderMode("oauth"));
 providerAuthModeSelectEl?.addEventListener("change", () => {
