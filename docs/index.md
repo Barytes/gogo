@@ -6,6 +6,7 @@
 
 ## 产品与总览
 
+- [release-target-and-boundaries.md](release-target-and-boundaries.md) - 当前对外发布目标、支持范围、外部依赖与开发态/正式分发边界
 - [product-definition-belief.md](product-definition-belief.md) - 产品目标与价值主张
 - [课题组公共知识库的联邦架构设计.md](课题组公共知识库的联邦架构设计.md) - 联邦架构全局设计（历史/全局视角）
 

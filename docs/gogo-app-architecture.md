@@ -8,7 +8,15 @@
 
 ## 1. 定位
 
-`gogo-app` 是一个可直接交付给用户使用的 agentic knowledge base 应用。
+`gogo-app` 的产品目标是成为一个可直接交付给用户使用的 agentic knowledge base 应用。
+
+当前这一定义已经进一步收敛为：
+
+- 对外阶段以**普通用户可直接安装的 Windows / macOS 桌面版**为目标形态
+- Web 版与桌面开发版主要承担开发、验证和过渡职责
+
+但当前仓库的**实际发布边界**仍需区分“开发者可运行的桌面版”和“最终用户双击可安装的桌面版”。  
+当前对外发布目标、支持范围与已知限制见 [release-target-and-boundaries.md](release-target-and-boundaries.md)。
 
 它的目标是：
 
