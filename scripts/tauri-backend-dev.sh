@@ -7,6 +7,7 @@ cd "$APP_ROOT"
 
 HOST="127.0.0.1"
 PORT="8000"
+export GOGO_RUNTIME="desktop"
 
 run_backend() {
   launcher_label="$1"

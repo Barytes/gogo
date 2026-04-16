@@ -139,7 +139,7 @@
 - `GET /api/settings`
 - `POST /api/settings/model-providers`
 - `DELETE /api/settings/model-providers/{provider_key}`
-- `POST /api/settings/model-providers/{provider_key}/desktop-login`
+- `POST /api/settings/pi-login`
 
 ### 4.4 Diagnostics 区
 

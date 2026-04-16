@@ -154,9 +154,9 @@ Browser
 
 为此，后端已经预留了稳定的登录桥接口：
 
-- `POST /api/settings/model-providers/{provider_key}/desktop-login`
+- `POST /api/settings/pi-login`
 
-当前在 Web 运行时，这个接口只返回“桌面版尚未接入”的提示；未来桌面壳接入后，前端不需要改交互路径，只需要把这个接口接到“拉起交互式 Pi CLI / 执行 `/login`”的桥接实现上。
+当前在 Web 运行时，这个接口只返回“桌面版尚未接入”的提示；桌面壳接入后，这个接口会统一打开交互式 Pi CLI，并触发原生 `/login`，而不是继续承担 provider-specific 登录语义。
 
 ## 5.2 设置、Inbox 与 diagnostics
 

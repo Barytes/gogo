@@ -256,7 +256,7 @@
 		                知识库
 		              </button>
 		              <button id="settings-nav-model-providers" class="settings-nav-button" type="button" data-settings-section="model-providers" aria-pressed="false">
-		                模型与 Provider
+		                模型
 		              </button>
 		              <button id="settings-nav-diagnostics" class="settings-nav-button" type="button" data-settings-section="diagnostics" aria-pressed="false">
 		                诊断
@@ -293,22 +293,19 @@
 		              <section id="settings-section-model-providers" class="settings-section-pane" data-settings-section-pane="model-providers">
 		                <div class="settings-section">
 		                  <div>
-		                    <p class="settings-subtitle">Pi Model Providers</p>
-		                    <p class="settings-help">
-		                      Provider 定义由 gogo-app 生成 extension 并在 Pi RPC 启动时通过 `--extension` 自动加载。认证层按桌面版优先设计：Pi 原生 OAuth 尽量交给 Pi CLI 处理，Web 版暂时保留手动 token 导入作为兜底。
-		                    </p>
+		                    <p class="settings-subtitle">模型</p>
 		                  </div>
 		                  <div class="settings-subsection">
-		                    <p class="settings-subtitle">已接入 Provider</p>
+		                    <p class="settings-subtitle">已接入模型</p>
 		                    <div id="provider-profile-list" class="settings-provider-list"></div>
-		                    <p id="provider-profile-empty" class="settings-help hidden">当前还没有通过 gogo-app 管理的 Provider。</p>
+		                    <p id="provider-profile-empty" class="settings-help hidden">当前还没有已接入模型。</p>
 		                  </div>
 		                  <div class="settings-subsection">
-		                    <div class="settings-mode-switch" role="tablist" aria-label="Provider 配置类型">
+		                    <div class="settings-mode-switch" role="tablist" aria-label="模型接入类型">
 		                      <button id="provider-mode-api" class="settings-mode-button active" type="button" aria-pressed="true">API</button>
 		                      <button id="provider-mode-oauth" class="settings-mode-button" type="button" aria-pressed="false">OAuth</button>
 		                    </div>
-		                    <div class="settings-grid">
+		                    <div id="provider-shared-fields" class="settings-grid">
 		                      <div class="settings-field">
 		                        <label for="provider-key-input">Provider Key</label>
 		                        <input id="provider-key-input" class="settings-input" type="text" placeholder="例如：my-provider / openai-codex" />
@@ -330,7 +327,7 @@
 		                        桌面版将优先通过 Pi CLI `/login` 完成登录；当前 Web 版可先使用“手动导入 token”作为兼容方案。
 		                      </p>
 		                    </div>
-		                    <div class="settings-grid">
+		                    <div id="provider-api-fields" class="settings-grid">
 		                      <div class="settings-field">
 		                        <label for="provider-base-url-input">Base URL</label>
 		                        <input id="provider-base-url-input" class="settings-input" type="text" placeholder="https://api.example.com/v1" />
@@ -340,7 +337,7 @@
 		                        <select id="provider-api-type-select" class="settings-input"></select>
 		                      </div>
 		                    </div>
-		                    <label class="settings-checkbox" for="provider-auth-header-input">
+		                    <label id="provider-auth-header-shell" class="settings-checkbox" for="provider-auth-header-input">
 		                      <input id="provider-auth-header-input" type="checkbox" />
 		                      <span>自动附加 `Authorization: Bearer`</span>
 		                    </label>
@@ -366,7 +363,7 @@
 		                        <input id="provider-oauth-account-input" class="settings-input" type="text" placeholder="accountId / email / projectId" />
 		                      </div>
 		                    </div>
-		                    <div class="settings-field">
+		                    <div id="provider-models-shell" class="settings-field">
 		                      <label for="provider-models-text">模型列表</label>
 		                      <textarea
 		                        id="provider-models-text"
@@ -378,9 +375,16 @@
 		                        如果是自定义 API Provider，通常至少要配置一行模型。内置 OAuth Provider 如果已经自带模型，这里可以留空。
 		                      </p>
 		                    </div>
-		                    <div class="settings-actions">
+		                    <div id="provider-oauth-intro-shell" class="settings-field hidden">
+		                      <p class="settings-help">
+		                        OAuth 登录会打开终端中的 Pi agent。打开后请在终端里手动输入 <code>/login</code>，再由你自己选择支持的模型提供商并完成登录。
+		                      </p>
+		                      <div class="settings-actions">
+		                        <button id="provider-desktop-login-button" class="button button-secondary" type="button">打开终端 Pi 登录</button>
+		                      </div>
+		                    </div>
+		                    <div id="provider-api-actions" class="settings-actions">
 		                      <button id="save-provider-button" class="button button-primary" type="button">保存 Provider</button>
-		                      <button id="provider-desktop-login-button" class="button button-secondary hidden" type="button">Pi 登录</button>
 		                      <button id="reset-provider-button" class="button button-secondary" type="button">清空表单</button>
 		                    </div>
 		                    <p id="provider-settings-feedback" class="settings-feedback hidden" aria-live="polite"></p>
@@ -424,6 +428,7 @@
 		          </div>
 		        </section>
 		      </div>
+	      <div id="settings-toast-viewport" class="settings-toast-viewport" aria-live="polite" aria-atomic="true"></div>
 	    </div>
 
 	    <script src="/assets/desktop-bridge.js?v=20260416-01"></script>

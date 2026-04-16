@@ -326,6 +326,41 @@ code {
   font-weight: 600;
 }
 
+.settings-toast-viewport {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 60;
+  display: grid;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.settings-toast {
+  min-width: 240px;
+  max-width: min(420px, calc(100vw - 48px));
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(24, 92, 82, 0.14);
+  background: rgba(255, 251, 244, 0.96);
+  color: var(--text);
+  box-shadow: 0 16px 32px rgba(48, 40, 31, 0.14);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  pointer-events: auto;
+}
+
+.settings-toast.success {
+  border-color: rgba(24, 92, 82, 0.18);
+  background: rgba(248, 252, 250, 0.96);
+}
+
+.settings-toast.error {
+  border-color: rgba(177, 83, 47, 0.2);
+  background: rgba(255, 247, 243, 0.98);
+  color: var(--accent);
+}
+
 .settings-actions {
   display: flex;
   gap: 10px;

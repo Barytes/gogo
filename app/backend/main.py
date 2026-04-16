@@ -3,8 +3,14 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from datetime import datetime
 import logging
+import os
 from pathlib import Path
 import json
+import platform
+import shlex
+import subprocess
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 from urllib.parse import unquote
 import uuid
 
@@ -20,7 +26,9 @@ from .config import (
     get_gogo_runtime,
     get_knowledge_base_dir,
     get_knowledge_base_settings,
+    get_pi_command,
     get_model_provider_settings,
+    get_pi_command_path,
     get_pi_extension_paths,
     get_pi_rpc_session_dir,
     get_pi_timeout_seconds,
@@ -79,6 +87,99 @@ def _safe_path_payload(path: Path) -> dict[str, object]:
         "path": str(path),
         "exists": path.exists(),
         "is_dir": path.is_dir(),
+    }
+
+
+def _desktop_bridge_url() -> str:
+    return str(os.getenv("GOGO_DESKTOP_BRIDGE_URL") or "").strip()
+
+
+def _post_to_desktop_bridge(path: str, payload: dict[str, object]) -> dict[str, object]:
+    base_url = _desktop_bridge_url()
+    if not base_url:
+        raise RuntimeError("桌面桥地址缺失，无法调用 Tauri 登录桥。")
+    url = f"{base_url.rstrip('/')}/{path.lstrip('/')}"
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    request = urllib_request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib_request.urlopen(request, timeout=10) as response:
+            raw = response.read().decode("utf-8")
+    except urllib_error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        try:
+            parsed = json.loads(detail) if detail else {}
+        except json.JSONDecodeError:
+            parsed = {}
+        clean_detail = parsed.get("detail") if isinstance(parsed, dict) else ""
+        raise RuntimeError(str(clean_detail or detail or f"桌面桥返回 HTTP {exc.code}")) from exc
+    except urllib_error.URLError as exc:
+        raise RuntimeError(f"无法连接桌面桥：{exc.reason}") from exc
+
+    if not raw.strip():
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("桌面桥返回了无法解析的响应。") from exc
+    return data if isinstance(data, dict) else {}
+
+
+def _shell_quote(value: str) -> str:
+    return shlex.quote(str(value or ""))
+
+
+def _build_direct_pi_shell_command() -> str:
+    pi_parts = [_shell_quote(get_pi_command_path() or get_pi_command())]
+    for path in get_pi_extension_paths():
+        pi_parts.append("--extension")
+        pi_parts.append(_shell_quote(str(path)))
+    return " ; ".join(
+        [
+            f"cd {_shell_quote(str(ROOT_DIR))}",
+            " ".join(pi_parts),
+            "printf '\\nPi 已启动。若未自动触发登录，请输入设置面板提示中的 /login 命令。\\n'",
+            "exec $SHELL -l",
+        ]
+    )
+
+
+def _run_osascript_lines(lines: list[str]) -> None:
+    command = ["osascript"]
+    for line in lines:
+        command.extend(["-e", line])
+    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    if completed.returncode == 0:
+        return
+    detail = (completed.stderr or completed.stdout or "").strip()
+    raise RuntimeError(detail or "调用 osascript 失败。")
+
+
+def _applescript_escape(value: str) -> str:
+    return str(value or "").replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _start_desktop_pi_login_direct() -> dict[str, object]:
+    if platform.system().lower() != "darwin":
+        raise RuntimeError("当前开发态兜底登录只实现了 macOS。")
+
+    shell_command = _build_direct_pi_shell_command()
+    _run_osascript_lines(
+        [
+            'tell application "Terminal" to activate',
+            f'tell application "Terminal" to do script "{_applescript_escape(shell_command)}"',
+        ]
+    )
+    detail = "已打开 Pi 终端。请在终端里手动输入 `/login`，完成登录后 gogo-app 会自动刷新 Provider 状态。"
+
+    return {
+        "success": True,
+        "detail": detail,
+        "command_hint": "/login",
     }
 
 
@@ -476,17 +577,36 @@ def remove_model_provider(provider_key: str) -> dict[str, object]:
     }
 
 
-@app.post("/api/settings/model-providers/{provider_key}/desktop-login")
-def start_model_provider_desktop_login(provider_key: str) -> dict[str, object]:
+@app.post("/api/settings/pi-login")
+def start_pi_login() -> dict[str, object]:
     if not is_desktop_runtime():
         raise HTTPException(
             status_code=501,
-            detail="当前仍是 Web 版 gogo-app，暂时不能直接拉起 Pi CLI 登录。后续桌面版会复用这个接口触发 `pi` 的登录流程。",
+            detail="当前仍是 Web 版 gogo-app，暂时不能直接拉起 Pi CLI 登录。桌面版会通过这个接口打开本地 `pi`，并触发原生 `/login` 流程。",
         )
-    raise HTTPException(
-        status_code=501,
-        detail=f"Provider `{provider_key}` 的桌面版 Pi CLI 登录桥接尚未实现。",
-    )
+    if not get_pi_command_path():
+        raise HTTPException(
+            status_code=500,
+            detail="当前机器上没有可用的 `pi` 命令，无法拉起桌面版 Pi 登录。",
+        )
+
+    try:
+        if _desktop_bridge_url():
+            bridge_result = _post_to_desktop_bridge("/desktop-login", {})
+        else:
+            bridge_result = _start_desktop_pi_login_direct()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "success": bool(bridge_result.get("success", True)),
+        "detail": str(
+            bridge_result.get("detail")
+            or "已打开桌面版 Pi 登录流程。"
+        ),
+        "command_hint": str(bridge_result.get("command_hint") or "/login"),
+        "model_providers": get_model_provider_settings(),
+    }
 
 
 @app.get("/api/chat/suggestions")

@@ -164,7 +164,6 @@ triggerPiLogin(providerKey)
 
 第一阶段稳定后，再补这些更像“桌面产品”的能力：
 
-- Pi CLI `/login` 桥
 - 菜单 / 托盘
 - 文件监听与变更刷新
 - 原生日志目录与诊断导出
@@ -172,9 +171,17 @@ triggerPiLogin(providerKey)
 
 其中优先级最高的是：
 
-1. `Pi CLI /login`
-2. 目录选择与路径打开
-3. 内置 Python 运行时
+1. 目录选择与路径打开
+2. 内置 Python 运行时
+3. 打包分发与诊断增强
+
+当前补充说明：
+
+- `Pi CLI /login` 桥已接通：
+  - Tauri 会启动一个仅供本地 FastAPI 使用的桌面桥
+  - 统一登录接口 `POST /api/settings/pi-login` 会通过该桥拉起系统终端中的交互式 `pi`
+  - macOS 下会尽量自动输入原生 `/login`；若系统未授予自动输入权限，则退回为打开终端并提示用户手动执行
+  - 前端会在触发后轮询 Provider 状态，检测到 `auth.json` 更新后自动刷新 Provider 与模型列表
 
 ## 9. 后端启动策略建议
 
@@ -247,7 +254,7 @@ Tauri 侧建议延续当前 Electron 版已经验证过的启动顺序：
 
 ### 第四步：接 Pi CLI 登录
 
-- 把 `POST /api/settings/model-providers/{provider_key}/desktop-login` 接到真实桌面命令
+- 把统一登录接口 `POST /api/settings/pi-login` 接到真实桌面命令
 - 明确 CLI 调用、日志回传和失败提示
 
 ### 第五步：再评估打包

@@ -67,6 +67,7 @@ npm run desktop:dev
 - 探活 `/api/health`
 - 创建原生窗口并加载本地工作台页面
 - 通过桌面桥恢复“选择知识库目录”
+- 通过统一登录入口打开 Pi CLI，并尝试触发原生 `/login`，然后在登录完成后自动刷新 Provider 状态
 
 如果后续要构建桌面产物，再运行：
 
@@ -76,7 +77,6 @@ npm run desktop:build
 
 当前仍然保留的已知边界：
 
-- Pi CLI `/login` 桥尚未接上
 - 打包内置 Python 运行时尚未处理
 - 自动更新尚未实现
 

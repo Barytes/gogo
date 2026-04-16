@@ -10,6 +10,7 @@ const knowledgeBaseNameEl = document.querySelector("#knowledge-base-name");
 const openSettingsButtonEl = document.querySelector("#open-settings-panel");
 const closeSettingsButtonEl = document.querySelector("#close-settings-panel");
 const settingsOverlayEl = document.querySelector("#settings-overlay");
+const settingsToastViewportEl = document.querySelector("#settings-toast-viewport");
 const settingsNavButtonEls = Array.from(document.querySelectorAll("[data-settings-section]"));
 const settingsSectionPaneEls = Array.from(document.querySelectorAll("[data-settings-section-pane]"));
 const knowledgeBasePathInputEl = document.querySelector("#knowledge-base-path-input");
@@ -22,6 +23,7 @@ const providerProfileListEl = document.querySelector("#provider-profile-list");
 const providerProfileEmptyEl = document.querySelector("#provider-profile-empty");
 const providerModeApiButtonEl = document.querySelector("#provider-mode-api");
 const providerModeOauthButtonEl = document.querySelector("#provider-mode-oauth");
+const providerSharedFieldsEl = document.querySelector("#provider-shared-fields");
 const providerKeyInputEl = document.querySelector("#provider-key-input");
 const providerDisplayNameInputEl = document.querySelector("#provider-display-name-input");
 const providerOauthPresetShellEl = document.querySelector("#provider-oauth-preset-shell");
@@ -30,7 +32,9 @@ const providerAuthModeShellEl = document.querySelector("#provider-auth-mode-shel
 const providerAuthModeSelectEl = document.querySelector("#provider-auth-mode-select");
 const providerAuthModeHelpEl = document.querySelector("#provider-auth-mode-help");
 const providerBaseUrlInputEl = document.querySelector("#provider-base-url-input");
+const providerApiFieldsEl = document.querySelector("#provider-api-fields");
 const providerApiTypeSelectEl = document.querySelector("#provider-api-type-select");
+const providerAuthHeaderShellEl = document.querySelector("#provider-auth-header-shell");
 const providerAuthHeaderInputEl = document.querySelector("#provider-auth-header-input");
 const providerApiSecretShellEl = document.querySelector("#provider-api-secret-shell");
 const providerApiKeyInputEl = document.querySelector("#provider-api-key-input");
@@ -39,7 +43,10 @@ const providerAccessTokenInputEl = document.querySelector("#provider-access-toke
 const providerRefreshTokenInputEl = document.querySelector("#provider-refresh-token-input");
 const providerOauthExpiresInputEl = document.querySelector("#provider-oauth-expires-input");
 const providerOauthAccountInputEl = document.querySelector("#provider-oauth-account-input");
+const providerModelsShellEl = document.querySelector("#provider-models-shell");
 const providerModelsTextEl = document.querySelector("#provider-models-text");
+const providerOauthIntroShellEl = document.querySelector("#provider-oauth-intro-shell");
+const providerApiActionsEl = document.querySelector("#provider-api-actions");
 const saveProviderButtonEl = document.querySelector("#save-provider-button");
 const providerDesktopLoginButtonEl = document.querySelector("#provider-desktop-login-button");
 const resetProviderButtonEl = document.querySelector("#reset-provider-button");
@@ -53,6 +60,8 @@ const diagnosticsSessionListEl = document.querySelector("#diagnostics-session-li
 const diagnosticsProviderListEl = document.querySelector("#diagnostics-provider-list");
 
 const STORAGE_KEY = "research-kb-workbench-layout";
+const DESKTOP_PI_LOGIN_POLL_INTERVAL_MS = 2500;
+const DESKTOP_PI_LOGIN_TIMEOUT_MS = 120000;
 
 const workbenchState = {
   layout: "wiki",
@@ -210,6 +219,19 @@ function setFeedback(element, message, isError = false) {
   element.style.color = isError ? "#b1532f" : "#185c52";
 }
 
+function showSettingsToast(message, variant = "success", duration = 2800) {
+  if (!message || !settingsToastViewportEl) {
+    return;
+  }
+  const toast = document.createElement("div");
+  toast.className = `settings-toast ${variant === "error" ? "error" : "success"}`;
+  toast.textContent = String(message);
+  settingsToastViewportEl.appendChild(toast);
+  window.setTimeout(() => {
+    toast.remove();
+  }, duration);
+}
+
 function setKnowledgeBaseFeedback(message, isError = false) {
   setFeedback(knowledgeBaseFeedbackEl, message, isError);
 }
@@ -220,6 +242,12 @@ function setProviderFeedback(message, isError = false) {
 
 function setDiagnosticsFeedback(message, isError = false) {
   setFeedback(diagnosticsFeedbackEl, message, isError);
+}
+
+function clearSettingsFeedback() {
+  setKnowledgeBaseFeedback("");
+  setProviderFeedback("");
+  setDiagnosticsFeedback("");
 }
 
 function renderDiagnosticsList(element, items) {
@@ -347,7 +375,8 @@ async function loadDiagnostics(force = false) {
     diagnosticsState.data = payload;
     diagnosticsState.loadedAt = Date.now();
     renderDiagnostics();
-    setDiagnosticsFeedback(`诊断信息已刷新：${diagnosticsValue(payload.generated_at)}`);
+    setDiagnosticsFeedback("");
+    showSettingsToast(`诊断信息已刷新：${diagnosticsValue(payload.generated_at)}`);
   } catch (error) {
     setDiagnosticsFeedback(`刷新失败：${error.message}`, true);
   } finally {
@@ -357,8 +386,13 @@ async function loadDiagnostics(force = false) {
 }
 
 function setActiveSettingsSection(section) {
-  activeSettingsSection =
+  const nextSection =
     section === "model-providers" || section === "diagnostics" ? section : "knowledge-base";
+  if (nextSection !== activeSettingsSection) {
+    clearSettingsFeedback();
+  }
+  activeSettingsSection =
+    nextSection;
   settingsNavButtonEls.forEach((button) => {
     const isActive = button.dataset.settingsSection === activeSettingsSection;
     button.classList.toggle("active", isActive);
@@ -408,6 +442,33 @@ function renderKnowledgeBaseSettings() {
 
 function providerProfiles() {
   return Array.isArray(appSettings?.model_providers?.profiles) ? appSettings.model_providers.profiles : [];
+}
+
+function providerProfileByKey(providerKey, source = appSettings) {
+  const profiles = Array.isArray(source?.model_providers?.profiles) ? source.model_providers.profiles : [];
+  const targetKey = String(providerKey || "").trim().toLowerCase();
+  return (
+    profiles.find(
+      (item) => String(item?.provider_key || "").trim().toLowerCase() === targetKey
+    ) || null
+  );
+}
+
+function providerDesktopLoginFingerprint(profile) {
+  if (!profile || typeof profile !== "object") {
+    return "";
+  }
+  return JSON.stringify({
+    oauth_connected: Boolean(profile.oauth_connected),
+    oauth_expires_at: Number(profile.oauth_expires_at || 0),
+    oauth_account_id: String(profile.oauth_account_id || ""),
+    oauth_email: String(profile.oauth_email || ""),
+    oauth_project_id: String(profile.oauth_project_id || ""),
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function providerApiTypes() {
@@ -528,7 +589,7 @@ function updateProviderAuthModeHelp() {
     return;
   }
   providerAuthModeHelpEl.textContent = desktopReady
-    ? "桌面版会通过 Pi CLI 的 `/login` 流程完成登录与刷新；gogo-app 只负责展示状态和触发登录。"
+    ? "桌面版会打开 Pi CLI 并触发原生 `/login`；gogo-app 只负责展示状态和刷新结果。"
     : "当前还是 Web 版，这里先保存“未来由 Pi CLI 登录”的 provider 定义；真正的 `/login` 触发会在桌面版接上。";
 }
 
@@ -537,12 +598,7 @@ function applyProviderAuthMode(mode) {
   if (providerAuthModeSelectEl) {
     providerAuthModeSelectEl.value = providerAuthMode;
   }
-  const showManualTokens = providerFormMode === "oauth" && providerAuthMode === "manual-tokens";
-  providerOauthTokenShellEl?.classList.toggle("hidden", !showManualTokens);
-  providerDesktopLoginButtonEl?.classList.toggle(
-    "hidden",
-    !(providerFormMode === "oauth" && providerAuthMode === "desktop-pi-login")
-  );
+  providerOauthTokenShellEl?.classList.add("hidden");
   updateProviderAuthModeHelp();
 }
 
@@ -552,11 +608,19 @@ function applyProviderMode(mode) {
   providerModeOauthButtonEl?.classList.toggle("active", providerFormMode === "oauth");
   providerModeApiButtonEl?.setAttribute("aria-pressed", String(providerFormMode === "api"));
   providerModeOauthButtonEl?.setAttribute("aria-pressed", String(providerFormMode === "oauth"));
-  providerOauthPresetShellEl?.classList.toggle("hidden", providerFormMode !== "oauth");
-  providerAuthModeShellEl?.classList.toggle("hidden", providerFormMode !== "oauth");
-  providerApiSecretShellEl?.classList.toggle("hidden", providerFormMode !== "api");
+  const isApiMode = providerFormMode === "api";
+  providerSharedFieldsEl?.classList.toggle("hidden", !isApiMode);
+  providerApiFieldsEl?.classList.toggle("hidden", !isApiMode);
+  providerAuthHeaderShellEl?.classList.toggle("hidden", !isApiMode);
+  providerApiSecretShellEl?.classList.toggle("hidden", !isApiMode);
+  providerModelsShellEl?.classList.toggle("hidden", !isApiMode);
+  providerApiActionsEl?.classList.toggle("hidden", !isApiMode);
+  providerOauthIntroShellEl?.classList.toggle("hidden", isApiMode);
+  providerOauthPresetShellEl?.classList.add("hidden");
+  providerAuthModeShellEl?.classList.add("hidden");
+  providerOauthTokenShellEl?.classList.add("hidden");
   if (providerAuthHeaderInputEl) {
-    providerAuthHeaderInputEl.disabled = providerFormMode !== "api";
+    providerAuthHeaderInputEl.disabled = !isApiMode;
   }
   if (saveProviderButtonEl) {
     saveProviderButtonEl.textContent = editingProviderKey ? "更新 Provider" : "保存 Provider";
@@ -586,15 +650,9 @@ function resetProviderForm(mode = providerFormMode) {
 
 function providerSummary(profile) {
   if (profile.config_kind === "oauth") {
-    if (profile.auth_mode === "desktop-pi-login") {
-      return "这个 OAuth Provider 按桌面版架构配置：Provider 定义由 gogo-app 托管，登录与自动刷新预留给后续桌面版通过 Pi CLI `/login` 处理。";
-    }
-    if (profile.uses_extension) {
-      return "这个 OAuth Provider 目前走“手动导入 token”兼容路径：gogo-app 会生成 extension 注册 provider，token 仍写入 Pi 的 auth.json。";
-    }
-    return "这个 OAuth Provider 当前使用手动 token 导入，适用于 Pi 已内置或已存在的 provider。";
+    return "OAuth";
   }
-  return "这个 API Provider 会通过 gogo-app 生成的 extension 注册到 Pi RPC，并使用 Pi 的 auth.json 保存 API key。";
+  return "API";
 }
 
 function canTriggerDesktopPiLogin(profile) {
@@ -673,11 +731,7 @@ function renderProviderProfiles() {
     const title = document.createElement("p");
     title.className = "settings-provider-title";
     title.textContent = profile.display_name || profile.provider_key || "未命名 Provider";
-    const key = document.createElement("p");
-    key.className = "settings-provider-key";
-    key.textContent = profile.provider_key || "";
     identity.appendChild(title);
-    identity.appendChild(key);
 
     const actions = document.createElement("div");
     actions.className = "settings-provider-actions";
@@ -687,17 +741,6 @@ function renderProviderProfiles() {
     editButton.className = "button button-secondary";
     editButton.textContent = "编辑";
     editButton.addEventListener("click", () => populateProviderForm(profile));
-
-    if (canTriggerDesktopPiLogin(profile)) {
-      const loginButton = document.createElement("button");
-      loginButton.type = "button";
-      loginButton.className = "button button-secondary";
-      loginButton.textContent = "Pi 登录";
-      loginButton.addEventListener("click", async () => {
-        await triggerDesktopPiLogin(profile.provider_key);
-      });
-      actions.appendChild(loginButton);
-    }
 
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
@@ -718,36 +761,13 @@ function renderProviderProfiles() {
 
     const meta = document.createElement("div");
     meta.className = "settings-provider-meta";
-    const chips = [
-      profile.config_kind === "oauth" ? "OAuth" : "API",
-      profile.managed ? "gogo-app 管理" : "外部已存在",
-      profile.uses_extension ? "RPC 会自动加载 extension" : "不需要 extension",
-    ];
-    if (profile.model_count) {
-      chips.push(`${profile.model_count} 个模型`);
-    }
-    if (profile.config_kind === "api") {
-      chips.push(profile.credentials_configured ? "已保存 API key" : "未保存 API key");
-    } else {
-      chips.push(profile.auth_mode_label || (profile.auth_mode === "manual-tokens" ? "手动导入 token" : "桌面版 Pi 登录"));
-      if (profile.auth_mode === "manual-tokens") {
-        chips.push(profile.oauth_connected ? "已保存 token" : "未保存 token");
-      } else {
-        chips.push(profile.oauth_connected ? "Pi 已登录" : "待通过 Pi 登录");
-      }
-    }
-    chips.filter(Boolean).forEach((label) => {
+    [providerSummary(profile)].filter(Boolean).forEach((label) => {
       const chip = document.createElement("span");
       chip.className = "settings-provider-chip";
       chip.textContent = label;
       meta.appendChild(chip);
     });
     card.appendChild(meta);
-
-    const summary = document.createElement("p");
-    summary.className = "settings-provider-summary";
-    summary.textContent = providerSummary(profile);
-    card.appendChild(summary);
     providerProfileListEl.appendChild(card);
   });
 }
@@ -777,16 +797,12 @@ async function loadAppSettings() {
 function openSettingsPanel() {
   settingsOverlayEl?.classList.remove("hidden");
   setActiveSettingsSection(activeSettingsSection);
-  setKnowledgeBaseFeedback("");
-  setProviderFeedback("");
-  setDiagnosticsFeedback("");
+  clearSettingsFeedback();
 }
 
 function closeSettingsPanel() {
   settingsOverlayEl?.classList.add("hidden");
-  setKnowledgeBaseFeedback("");
-  setProviderFeedback("");
-  setDiagnosticsFeedback("");
+  clearSettingsFeedback();
 }
 
 async function applyKnowledgeBasePath(pathOverride = "") {
@@ -842,7 +858,7 @@ async function pickKnowledgeBasePath() {
   try {
     const result = await desktopBridge.selectKnowledgeBaseDirectory();
     if (result?.canceled) {
-      setKnowledgeBaseFeedback("已取消目录选择。");
+      setKnowledgeBaseFeedback("");
       return;
     }
     const nextPath = String(result?.path || "").trim();
@@ -892,21 +908,44 @@ async function refreshPiOptionsAfterProviderChange() {
 }
 
 async function triggerDesktopPiLogin(providerKey) {
-  if (!providerKey) {
-    setProviderFeedback("请先选择一个 Provider。", true);
-    return;
-  }
-  setProviderFeedback(`正在尝试为 ${providerKey} 触发 Pi 登录...`);
+  const watchedProviderKey = String(providerKey || "").trim();
+  const previousProfile = watchedProviderKey ? providerProfileByKey(watchedProviderKey) : null;
+  const previousFingerprint = providerDesktopLoginFingerprint(previousProfile);
+  setProviderFeedback("正在打开 Pi 登录终端...");
   try {
-    const safeKey = encodeURIComponent(providerKey);
-    const response = await fetch(`/api/settings/model-providers/${safeKey}/desktop-login`, {
+    const response = await fetch("/api/settings/pi-login", {
       method: "POST",
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(data?.detail || `HTTP ${response.status}`);
     }
-    setProviderFeedback(data.detail || "Pi 登录流程已触发。");
+    setProviderFeedback("");
+    showSettingsToast(data.detail || "Pi 终端已打开，请在终端中手动输入 `/login`。");
+
+    const deadline = Date.now() + DESKTOP_PI_LOGIN_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      await sleep(DESKTOP_PI_LOGIN_POLL_INTERVAL_MS);
+      await loadAppSettings();
+      await refreshPiOptionsAfterProviderChange();
+      if (watchedProviderKey) {
+        const latestProfile = providerProfileByKey(watchedProviderKey);
+        if (!latestProfile) {
+          continue;
+        }
+        const latestFingerprint = providerDesktopLoginFingerprint(latestProfile);
+        if (latestFingerprint !== previousFingerprint && latestProfile.oauth_connected) {
+          setProviderFeedback("");
+          showSettingsToast(`Pi 登录已完成，${watchedProviderKey} 的 Provider 状态和模型列表已自动刷新。`);
+          return;
+        }
+      }
+    }
+
+    setProviderFeedback("");
+    showSettingsToast(
+      "Pi 终端已经打开；如果你还在登录中，请在终端中手动输入 `/login`。如果已经登录成功但状态未刷新，重新打开设置面板即可看到最新状态。"
+    );
   } catch (error) {
     setProviderFeedback(String(error.message || error), true);
   }
@@ -942,7 +981,8 @@ async function saveProviderProfile() {
     renderModelProviderSettings();
     await refreshPiOptionsAfterProviderChange();
     resetProviderForm(providerFormMode);
-    setProviderFeedback(data.detail || "Provider 已保存。");
+    setProviderFeedback("");
+    showSettingsToast(data.detail || "Provider 已保存。");
   } catch (error) {
     setProviderFeedback(`保存失败：${error.message}`, true);
   } finally {
@@ -970,7 +1010,8 @@ async function deleteProviderProfile(providerKey) {
     }
     renderModelProviderSettings();
     await refreshPiOptionsAfterProviderChange();
-    setProviderFeedback(data.detail || "Provider 已删除。");
+    setProviderFeedback("");
+    showSettingsToast(data.detail || "Provider 已删除。");
   } catch (error) {
     setProviderFeedback(`删除失败：${error.message}`, true);
   }

@@ -237,9 +237,9 @@ workbench.js / chat.js
 
 桌面版目标路径：
 
-- 通过 `POST /api/settings/model-providers/{provider_key}/desktop-login`
+- 通过 `POST /api/settings/pi-login`
 - 接到桌面壳桥接层
-- 拉起交互式 Pi CLI 登录
+- 拉起交互式 Pi CLI，并触发原生 `/login`
 
 ---
 

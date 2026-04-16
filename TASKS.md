@@ -63,8 +63,8 @@
   - [x] 打通前端设置面板保存/删除后对聊天模型菜单的即时刷新
   - 结论：Provider 定义现在由 gogo-app 生成到 `.gogo/pi-extensions/managed-providers.ts`，并在每次 Pi RPC 启动时通过 `--extension` 自动加载；API key / OAuth token 继续写入 Pi 自己的 `auth.json`，避免把凭证硬编码进 extension。
   - 结论：extension 不必放在 `~/.pi/agent/extensions/` 下，当前实现选择放在 gogo-app 自己的状态目录 `.gogo/pi-extensions/` 中，属于应用托管资源；这样更便于隔离、回收和后续桌面应用封装。
-  - 结论：Provider 架构已调整为“Provider 定义”和“认证流程”分离。当前 OAuth profile 会显式记录认证方式：桌面版目标路径是通过 Pi CLI `/login` 完成登录与自动刷新，Web 版仅保留“手动导入 token”作为兼容兜底。
-  - 结论：后端已预留 `POST /api/settings/model-providers/{provider_key}/desktop-login` 接口作为未来桌面版登录桥；当前 Web 版会明确返回“尚未接入 Pi CLI”的提示，避免把临时 token 导入方案误当成长期标准架构。
+  - 结论：Provider 架构已调整为“Provider 定义”和“认证流程”分离。当前推荐边界是：API key / 自定义 API 由 gogo-app 负责配置；OAuth / subscription 登录统一交给 Pi CLI `/login`。
+  - 结论：Web 版不承担 OAuth 登录职责；桌面版只需要提供“打开终端进入 Pi”的入口，并在用户完成 `/login` 后刷新认证状态与模型列表。
 
 - [x] 评估 `_build_pi_prompt` 中 history 注入是否仍有必要
   - [x] 判断是否可完全依赖 RPC 会话历史
@@ -101,12 +101,14 @@
   - [x] 更新 README / docs / code-doc-mapping，明确后续桌面化路线已经转为 Tauri
   - 结论：仓库已新增 `src-tauri/src/main.rs`、`src-tauri/src/backend.rs`、`src-tauri/src/commands.rs` 与基础 `tauri.conf.json`；Tauri 启动时会自动拉起本地 FastAPI、探活 `/api/health` 并加载本地服务页面。
   - 结论：前端知识库设置区已重新接回桌面版原生目录选择器；桥接来源从 Electron preload 改为 `app/frontend/assets/desktop-bridge.js + Tauri invoke`。
-- [ ] 实现桌面版 Pi CLI 登录桥
-  - [ ] 在桌面壳中提供“拉起交互式 `pi` / 执行 `/login`”的能力
-  - [ ] 将 `POST /api/settings/model-providers/{provider_key}/desktop-login` 接到桌面壳桥接层，而不是让前端自己实现 OAuth
-  - [ ] 登录完成后刷新 Provider 状态、模型列表与默认模型信息
-  - [ ] 明确 Pi CLI 登录窗口、失败提示和取消流程
-  - [ ] 仅把 Web 版的“手动导入 token”保留为兼容兜底，不再作为长期主路径
+- [x] 收敛桌面版 OAuth 登录路径为“打开终端进入 Pi，再由用户 `/login`”
+  - [x] 将当前桌面登录入口调整为“打开终端并运行 `pi`”，不再尝试 provider-specific 的自动输入或自动指定模型
+  - [x] 将统一登录接口 `POST /api/settings/pi-login` 的语义收敛为“提供进入 Pi CLI 的入口”，而不是替用户完成 provider-specific OAuth 流
+  - [x] 登录完成后继续刷新 Provider 状态、模型列表与默认模型信息
+  - [x] 在 UI 中明确提示：API key 在应用内配置，OAuth 登录请在终端中的 Pi CLI 执行 `/login`
+  - [x] 仅把 Web 版的“手动导入 token”保留为兼容兜底，不再作为长期主路径
+  - 结论：桌面版对外登录接口已统一为 `POST /api/settings/pi-login`；它现在只负责打开系统终端中的 `pi`，并尝试输入固定的 `/login`，不再带入任何 provider-specific 参数或模型信息。
+  - 结论：前端仍会在登录入口被触发后刷新 Provider 状态和模型列表；如果用户是从某个具体 Provider 卡片进入登录，前端会优先观察该 Provider 的状态变化，但底层登录命令本身始终是统一的 `/login`。
 - [ ] 桌面版中支持 Wiki Markdown 编辑模式
   - [ ] 明确编辑入口：Wiki 页面顶部按钮、只读/编辑双态、保存/取消交互
   - [ ] 明确编辑范围：优先仅支持 `wiki/*.md` 页面，后续再评估 `raw/*.md`
