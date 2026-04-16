@@ -67,15 +67,6 @@
                 <button id="hide-wiki-panel-chat" class="button button-secondary floating-control" type="button">
                   隐藏
                 </button>
-                <a
-                  id="open-source-file"
-                  class="button button-secondary hidden"
-                  href="#"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  打开原文件
-                </a>
                 <button
                   id="wiki-history-back"
                   class="button button-secondary wiki-history-button"
@@ -94,12 +85,28 @@
                 >
                   →
                 </button>
+                <button id="wiki-edit" class="button button-secondary" type="button">
+                  编辑
+                </button>
+                <button id="wiki-save" class="button button-primary hidden" type="button">
+                  保存
+                </button>
+                <button id="wiki-cancel" class="button button-secondary hidden" type="button">
+                  取消
+                </button>
                 <button id="quote-into-chat" class="button button-secondary" type="button">
                   引用
                 </button>
               </div>
             </div>
+            <p id="wiki-editor-feedback" class="wiki-editor-feedback hidden" aria-live="polite"></p>
             <article id="wiki-content" class="wiki-content"></article>
+            <textarea
+              id="wiki-editor"
+              class="wiki-editor hidden"
+              spellcheck="false"
+              aria-label="Wiki Markdown 编辑器"
+            ></textarea>
           </section>
         </section>
 
@@ -149,6 +156,27 @@
               </div>
 
               <div id="messages" class="messages"></div>
+              <button
+                id="chat-scroll-bottom-button"
+                class="chat-scroll-bottom-button hidden"
+                type="button"
+                aria-label="回到底部"
+                title="回到底部"
+              >
+                ↓
+              </button>
+              <div
+                id="chat-question-nav"
+                class="chat-question-nav hidden"
+                aria-label="当前会话问题导航"
+                tabindex="0"
+              >
+                <div id="chat-question-track" class="chat-question-track"></div>
+                <div id="chat-question-popover" class="chat-question-popover">
+                  <div class="chat-question-popover-header">当前会话问题</div>
+                  <div id="chat-question-list" class="chat-question-list"></div>
+                </div>
+              </div>
 	              <form id="chat-form" class="chat-form">
 	                <input
 	                  id="chat-upload-input"

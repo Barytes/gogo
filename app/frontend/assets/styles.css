@@ -710,11 +710,12 @@ body.layout-chat .unified-chat-panel {
 .chat-main {
   min-width: 0;
   min-height: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
   background: rgba(255, 255, 255, 0.78);
   border-left: 1px solid rgba(24, 92, 82, 0.08);
-  padding: 22px 28px 24px;
+  padding: 22px 72px 24px 28px;
 }
 
 .session-sidebar {
@@ -953,6 +954,162 @@ body.layout-chat .unified-chat-panel {
   padding-right: 4px;
 }
 
+.chat-scroll-bottom-button {
+  position: absolute;
+  right: 18px;
+  bottom: 132px;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(24, 92, 82, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--brand);
+  font: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 14px 30px rgba(24, 92, 82, 0.12);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+  z-index: 3;
+}
+
+.chat-scroll-bottom-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(24, 92, 82, 0.28);
+  box-shadow: 0 18px 34px rgba(24, 92, 82, 0.16);
+}
+
+.chat-question-nav {
+  position: absolute;
+  top: 140px;
+  right: 10px;
+  bottom: 220px;
+  width: 10px;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  z-index: 2;
+}
+
+.chat-question-track {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.chat-question-marker {
+  width: 8px;
+  height: 2px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(31, 42, 40, 0.16);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    width 160ms ease;
+}
+
+.chat-question-marker:hover,
+.chat-question-marker:focus-visible {
+  width: 9px;
+  background: rgba(24, 92, 82, 0.52);
+  outline: none;
+}
+
+.chat-question-marker.active {
+  width: 10px;
+  background: #4169e1;
+}
+
+.chat-question-popover {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(180px, 19vw);
+  max-height: min(36vh, 260px);
+  padding: 8px 8px 6px;
+  border-radius: 16px;
+  border: 1px solid rgba(24, 92, 82, 0.12);
+  background: rgba(255, 251, 244, 0.96);
+  box-shadow: 0 16px 28px rgba(48, 40, 31, 0.14);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.chat-question-nav.is-open .chat-question-popover,
+.chat-question-nav:hover .chat-question-popover,
+.chat-question-nav:focus-within .chat-question-popover {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) translateX(-2px);
+}
+
+.chat-question-popover-header {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.chat-question-list {
+  display: grid;
+  gap: 4px;
+  max-height: calc(min(36vh, 260px) - 32px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.chat-question-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 7px;
+  text-align: left;
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.chat-question-item:hover,
+.chat-question-item:focus-visible {
+  background: rgba(24, 92, 82, 0.08);
+  color: var(--text);
+  outline: none;
+}
+
+.chat-question-item.active {
+  color: var(--brand);
+  background: rgba(24, 92, 82, 0.1);
+}
+
+.chat-question-item-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-question-item-index {
+  color: rgba(31, 42, 40, 0.34);
+  font-size: 0.66rem;
+}
+
 .message {
   max-width: min(720px, 100%);
   padding: 18px 18px 16px;
@@ -1079,6 +1236,37 @@ body.layout-chat .unified-chat-panel {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.message-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.message-action-button {
+  border: 1px solid rgba(24, 92, 82, 0.14);
+  background: rgba(247, 244, 236, 0.9);
+  color: var(--brand);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.message-action-button:hover {
+  background: rgba(24, 92, 82, 0.08);
+  border-color: rgba(24, 92, 82, 0.24);
+  transform: translateY(-1px);
+}
+
+.message-action-button:focus-visible {
+  outline: 2px solid rgba(24, 92, 82, 0.24);
+  outline-offset: 2px;
 }
 
 .message-trace {
@@ -1701,6 +1889,38 @@ body.session-sidebar-collapsed .session-sidebar-top {
   padding-right: 4px;
 }
 
+.wiki-editor-feedback {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.wiki-editor-feedback.is-error {
+  color: var(--accent);
+}
+
+.wiki-editor {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  border: 1px solid rgba(24, 92, 82, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text);
+  padding: 18px 20px;
+  font: 500 0.97rem/1.7 "SF Mono", "JetBrains Mono", "Menlo", monospace;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
+}
+
+.wiki-editor:focus {
+  outline: none;
+  border-color: rgba(24, 92, 82, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 0 0 3px rgba(24, 92, 82, 0.08);
+}
+
 .wiki-content h1,
 .wiki-content h2,
 .wiki-content h3 {
@@ -2123,8 +2343,7 @@ body.layout-chat .wiki-meta > div:first-child {
 }
 
 body.layout-chat #wiki-category {
-  grid-column: 1;
-  grid-row: 1;
+  display: none;
 }
 
 body.layout-chat .detail-actions {
@@ -2205,6 +2424,15 @@ body.layout-chat.wiki-hidden .workbench-wiki {
     padding: 18px 0 0;
   }
 
+  .chat-question-nav {
+    display: none;
+  }
+
+  .chat-scroll-bottom-button {
+    right: 8px;
+    bottom: 124px;
+  }
+
   .unified-chat-panel {
     position: static;
   }
@@ -2258,6 +2486,11 @@ body.layout-chat.wiki-hidden .workbench-wiki {
 
   .topbar h1 {
     font-size: 2.2rem;
+  }
+
+  .chat-question-nav,
+  .chat-scroll-bottom-button {
+    display: none;
   }
 
   .settings-grid {

@@ -42,7 +42,7 @@ from .raw_service import (
     list_raw_files,
     search_raw_files,
 )
-from .wiki_service import get_page, get_tree, list_pages, search_pages
+from .wiki_service import get_page, get_tree, list_pages, save_page, search_pages
 from .session_manager import (
     get_session_pool,
     reset_session_pool,
@@ -838,6 +838,23 @@ def wiki_search(
 ) -> dict[str, object]:
     items = search_pages(q, limit=limit)
     return {"items": items, "count": len(items), "query": q}
+
+
+class WikiPageUpdateRequest(BaseModel):
+    content: str = Field(..., description="Updated markdown content")
+
+
+@app.patch("/api/wiki/page")
+def update_wiki_page(
+    payload: WikiPageUpdateRequest,
+    path: str = Query(..., description="Relative markdown path inside wiki/"),
+) -> dict[str, object]:
+    try:
+        return save_page(path, payload.content)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Wiki page not found: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/raw/files")

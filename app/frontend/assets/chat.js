@@ -1,4 +1,9 @@
 const messagesEl = document.querySelector("#messages");
+const chatScrollBottomButtonEl = document.querySelector("#chat-scroll-bottom-button");
+const chatQuestionNavEl = document.querySelector("#chat-question-nav");
+const chatQuestionTrackEl = document.querySelector("#chat-question-track");
+const chatQuestionListEl = document.querySelector("#chat-question-list");
+const chatQuestionPopoverEl = document.querySelector("#chat-question-popover");
 const formEl = document.querySelector("#chat-form");
 const inputEl = document.querySelector("#chat-input");
 const submitButtonEl = formEl?.querySelector("button[type='submit']");
@@ -81,10 +86,30 @@ let inboxFiles = [];
 let inboxPanelOpen = false;
 let inboxLoading = false;
 let highlightedInboxPath = "";
-let inboxDragActive = false;
-let inboxDragDepth = 0;
 const inboxDeletingPaths = new Set();
 const INBOX_INGEST_PROMPT = "请ingest一下inbox的内容。";
+let activeQuestionIndex = -1;
+let chatQuestionPopoverHideTimer = null;
+
+function clearChatQuestionPopoverHideTimer() {
+  if (chatQuestionPopoverHideTimer) {
+    window.clearTimeout(chatQuestionPopoverHideTimer);
+    chatQuestionPopoverHideTimer = null;
+  }
+}
+
+function openChatQuestionPopover() {
+  clearChatQuestionPopoverHideTimer();
+  chatQuestionNavEl?.classList.add("is-open");
+}
+
+function scheduleChatQuestionPopoverHide(delay = 850) {
+  clearChatQuestionPopoverHideTimer();
+  chatQuestionPopoverHideTimer = window.setTimeout(() => {
+    chatQuestionNavEl?.classList.remove("is-open");
+    chatQuestionPopoverHideTimer = null;
+  }, delay);
+}
 
 function applySessionSidebarState(collapsed) {
   document.body.classList.toggle("session-sidebar-collapsed", Boolean(collapsed));
@@ -293,10 +318,6 @@ function renderInboxPanel() {
   }
   if (inboxPanelEl) {
     inboxPanelEl.classList.toggle("hidden", !inboxPanelOpen);
-    inboxPanelEl.classList.toggle("is-drop-target", inboxDragActive);
-  }
-  if (toggleInboxPanelButtonEl) {
-    toggleInboxPanelButtonEl.classList.toggle("is-drop-target", inboxDragActive);
   }
   if (inboxCountBadgeEl) {
     inboxCountBadgeEl.textContent = String(inboxFiles.length);
@@ -395,8 +416,6 @@ function openInboxPanel() {
 
 function closeInboxPanel() {
   inboxPanelOpen = false;
-  inboxDragActive = false;
-  inboxDragDepth = 0;
   renderInboxPanel();
 }
 
@@ -435,21 +454,6 @@ function canUploadInboxFiles() {
   const isPendingForCurrent = Boolean(currentSessionId && pendingSessionIds.has(currentSessionId));
   const isAbortingCurrent = Boolean(currentSessionId && abortingSessionIds.has(currentSessionId));
   return !isUploadingInboxFile && !isPendingForCurrent && !isAbortingCurrent;
-}
-
-function setInboxDragState(active) {
-  inboxDragActive = Boolean(active);
-  renderInboxPanel();
-}
-
-function resetInboxDragState() {
-  inboxDragDepth = 0;
-  setInboxDragState(false);
-}
-
-function eventHasFiles(event) {
-  const types = Array.from(event?.dataTransfer?.types || []);
-  return types.includes("Files");
 }
 
 function getDroppedFiles(fileList) {
@@ -492,24 +496,13 @@ async function uploadInboxFiles(fileList) {
     highlightedInboxPath = uploadedPaths[uploadedPaths.length - 1] || "";
     await refreshInboxFiles({ open: true, highlightPath: highlightedInboxPath });
     const successCount = uploadedPaths.length;
-    if (successCount > 0 || failedFiles.length > 0) {
-      const successSummary =
-        successCount === 0
-          ? ""
-          : successCount === 1
-            ? `文件已上传到 ${uploadedPaths[0]}。`
-            : `已上传 ${successCount} 个文件到当前知识库的 inbox。`;
-      const failureSummary = failedFiles.length ? `失败 ${failedFiles.length} 个。` : "";
-      const detail = failedFiles.length ? ` ${failedFiles.join("；")}` : "";
-      const message = `${successSummary}${failureSummary}${successCount > 0 ? " 现在可以点上方 ingest，把整箱内容交给 Pi。" : ""}${detail}`.trim();
-      setInboxFeedback(message, successCount === 0);
-      showSettingsHint(
-        successCount > 0
-          ? successCount === 1
-            ? `已上传到 ${uploadedPaths[0]}`
-            : `已上传 ${successCount} 个文件`
-          : "上传失败，请查看 Inbox 面板"
-      );
+    if (failedFiles.length) {
+      const failureSummary = `失败 ${failedFiles.length} 个。`;
+      const detail = ` ${failedFiles.join("；")}`;
+      setInboxFeedback(`${failureSummary}${detail}`.trim(), true);
+      showSettingsHint("上传失败，请查看 Inbox 面板");
+    } else if (successCount > 0) {
+      setInboxFeedback("");
     }
   } catch (error) {
     console.error("Failed to upload inbox file batch:", error);
@@ -568,7 +561,7 @@ async function deleteInboxFile(file) {
       highlightedInboxPath = "";
     }
     inboxFiles = inboxFiles.filter((item) => item.path !== filePath);
-    setInboxFeedback(`已从 inbox 删除 ${filePath}。`);
+    setInboxFeedback("");
   } catch (error) {
     console.error("Failed to delete inbox file:", error);
     setInboxFeedback(`删除失败：${error.message}`, true);
@@ -1019,6 +1012,7 @@ function clearMessages() {
     return;
   }
   messagesEl.innerHTML = "";
+  refreshChatNavigation();
 }
 
 function storeCurrentSessionView() {
@@ -1039,6 +1033,7 @@ function restoreSessionView(sessionId) {
   clearMessages();
   messagesEl.append(...nodes);
   scrollMessagesToBottom(true);
+  refreshChatNavigation();
   return true;
 }
 
@@ -1057,6 +1052,7 @@ function renderHistory(messages) {
   }
   scrollMessagesToBottom(true);
   storeCurrentSessionView();
+  refreshChatNavigation();
 }
 
 function saveCurrentHistory() {
@@ -1136,6 +1132,141 @@ function isMessagesNearBottom() {
   return distanceToBottom <= AUTO_SCROLL_BOTTOM_THRESHOLD_PX;
 }
 
+function summarizeQuestionLabel(value, maxLength = 48) {
+  const normalized = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) {
+    return "未命名问题";
+  }
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxLength - 1).trim()}…`;
+}
+
+function getQuestionAnchors() {
+  if (!messagesEl) {
+    return [];
+  }
+  return Array.from(messagesEl.querySelectorAll(".message-user"));
+}
+
+function syncQuestionAnchors() {
+  const anchors = getQuestionAnchors();
+  anchors.forEach((element, index) => {
+    const label = summarizeQuestionLabel(
+      element.querySelector(".message-body")?.textContent || element.textContent || ""
+    );
+    element.dataset.questionIndex = String(index);
+    element.dataset.questionLabel = label;
+  });
+  return anchors;
+}
+
+function currentQuestionIndexFromScroll(anchors) {
+  if (!messagesEl || !anchors.length) {
+    return -1;
+  }
+  const threshold = messagesEl.scrollTop + Math.max(messagesEl.clientHeight * 0.3, 80);
+  let currentIndex = 0;
+  anchors.forEach((element, index) => {
+    if (element.offsetTop <= threshold) {
+      currentIndex = index;
+    }
+  });
+  return currentIndex;
+}
+
+function scrollToQuestion(index) {
+  if (!messagesEl) {
+    return;
+  }
+  const anchors = syncQuestionAnchors();
+  const target = anchors[index];
+  if (!target) {
+    return;
+  }
+  syncingProgrammaticMessageScroll = true;
+  messagesEl.scrollTo({
+    top: Math.max(target.offsetTop - 12, 0),
+    behavior: "smooth",
+  });
+  shouldAutoScrollMessages = false;
+  window.setTimeout(() => {
+    syncingProgrammaticMessageScroll = false;
+    updateChatScrollAffordances();
+  }, 220);
+}
+
+function renderQuestionNavigator(anchors) {
+  if (!chatQuestionTrackEl || !chatQuestionListEl || !chatQuestionNavEl) {
+    return;
+  }
+
+  chatQuestionTrackEl.innerHTML = "";
+  chatQuestionListEl.innerHTML = "";
+
+  if (!anchors.length) {
+    chatQuestionNavEl.classList.add("hidden");
+    activeQuestionIndex = -1;
+    return;
+  }
+
+  chatQuestionNavEl.classList.remove("hidden");
+
+  anchors.forEach((element, index) => {
+    const label = element.dataset.questionLabel || `问题 ${index + 1}`;
+
+    const marker = document.createElement("button");
+    marker.type = "button";
+    marker.className = "chat-question-marker";
+    marker.title = label;
+    marker.setAttribute("aria-label", `跳转到第 ${index + 1} 个问题：${label}`);
+    marker.classList.toggle("active", index === activeQuestionIndex);
+    marker.addEventListener("click", () => {
+      scrollToQuestion(index);
+    });
+    chatQuestionTrackEl.appendChild(marker);
+
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "chat-question-item";
+    item.classList.toggle("active", index === activeQuestionIndex);
+    item.title = label;
+    item.addEventListener("click", () => {
+      scrollToQuestion(index);
+    });
+
+    const itemLabel = document.createElement("span");
+    itemLabel.className = "chat-question-item-label";
+    itemLabel.textContent = label;
+
+    const itemIndex = document.createElement("span");
+    itemIndex.className = "chat-question-item-index";
+    itemIndex.textContent = String(index + 1).padStart(2, "0");
+
+    item.appendChild(itemLabel);
+    item.appendChild(itemIndex);
+    chatQuestionListEl.appendChild(item);
+  });
+}
+
+function updateChatScrollAffordances() {
+  const anchors = syncQuestionAnchors();
+  activeQuestionIndex = currentQuestionIndexFromScroll(anchors);
+  renderQuestionNavigator(anchors);
+  if (chatScrollBottomButtonEl) {
+    chatScrollBottomButtonEl.classList.toggle("hidden", isMessagesNearBottom());
+  }
+}
+
+function refreshChatNavigation() {
+  window.requestAnimationFrame(() => {
+    updateChatScrollAffordances();
+  });
+}
+
 function scrollMessagesToBottom(force = false) {
   if (!messagesEl) {
     return;
@@ -1148,6 +1279,7 @@ function scrollMessagesToBottom(force = false) {
   shouldAutoScrollMessages = true;
   window.requestAnimationFrame(() => {
     syncingProgrammaticMessageScroll = false;
+    updateChatScrollAffordances();
   });
 }
 
@@ -1168,7 +1300,33 @@ function injectPrompt(text, replace = false) {
     ? text
     : `${inputEl.value.trim()}\n\n${text}`;
   inputEl.value = nextValue;
+  inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+  refreshChatPendingState();
   focusChatInput();
+}
+
+function buildWritebackPrompt() {
+  return "请将上述回答写回wiki页面";
+}
+
+function createAssistantActions(getContent) {
+  const actions = document.createElement("div");
+  actions.className = "message-actions";
+
+  const writebackButton = document.createElement("button");
+  writebackButton.type = "button";
+  writebackButton.className = "message-action-button";
+  writebackButton.textContent = "写回";
+  writebackButton.addEventListener("click", () => {
+    const content = typeof getContent === "function" ? String(getContent() || "").trim() : "";
+    if (!content) {
+      return;
+    }
+    injectPrompt(buildWritebackPrompt(), false);
+  });
+
+  actions.appendChild(writebackButton);
+  return actions;
 }
 
 function setChatPending(isPending) {
@@ -1238,6 +1396,35 @@ messagesEl?.addEventListener("scroll", () => {
     return;
   }
   shouldAutoScrollMessages = isMessagesNearBottom();
+  updateChatScrollAffordances();
+});
+
+chatScrollBottomButtonEl?.addEventListener("click", () => {
+  scrollMessagesToBottom(true);
+});
+
+chatQuestionNavEl?.addEventListener("mouseenter", () => {
+  openChatQuestionPopover();
+});
+
+chatQuestionNavEl?.addEventListener("mouseleave", () => {
+  scheduleChatQuestionPopoverHide();
+});
+
+chatQuestionNavEl?.addEventListener("focusin", () => {
+  openChatQuestionPopover();
+});
+
+chatQuestionNavEl?.addEventListener("focusout", () => {
+  scheduleChatQuestionPopoverHide(1800);
+});
+
+chatQuestionPopoverEl?.addEventListener("mouseenter", () => {
+  openChatQuestionPopover();
+});
+
+chatQuestionPopoverEl?.addEventListener("mouseleave", () => {
+  scheduleChatQuestionPopoverHide();
 });
 
 messagesEl?.addEventListener("click", async (event) => {
@@ -1581,6 +1768,9 @@ function appendMessage(role, content, consultedPages = [], trace = [], warnings 
 
   const wrapper = document.createElement("article");
   wrapper.className = `message message-${role}`;
+  if (role === "user") {
+    wrapper.dataset.questionAnchor = "true";
+  }
 
   if (role === "assistant") {
     renderTrace(wrapper, trace, warnings);
@@ -1597,8 +1787,13 @@ function appendMessage(role, content, consultedPages = [], trace = [], warnings 
     wrapper.appendChild(meta);
   }
 
+  if (role === "assistant") {
+    wrapper.appendChild(createAssistantActions(() => content));
+  }
+
   messagesEl.appendChild(wrapper);
   scrollMessagesToBottom();
+  refreshChatNavigation();
 }
 
 function createStreamingAssistantMessage(initialText) {
@@ -1642,8 +1837,13 @@ function createStreamingAssistantMessage(initialText) {
   metaHost.hidden = true;
   wrapper.appendChild(metaHost);
 
+  const actionsEl = createAssistantActions(() => rawContent);
+  actionsEl.hidden = !String(initialText || "").trim() || String(initialText || "").includes("Pi 正在生成答复");
+  wrapper.appendChild(actionsEl);
+
   messagesEl.appendChild(wrapper);
   scrollMessagesToBottom();
+  refreshChatNavigation();
 
   let traceCount = 0;
   let warningCount = 0;
@@ -1707,6 +1907,7 @@ function createStreamingAssistantMessage(initialText) {
       rawContent = String(text || "");
       hasActualText = true;
       renderMessageBody(bodyEl, "assistant", rawContent);
+      actionsEl.hidden = !rawContent.trim();
       scrollMessagesToBottom();
     },
     appendDelta(delta) {
@@ -1719,6 +1920,7 @@ function createStreamingAssistantMessage(initialText) {
       }
       rawContent += delta;
       renderMessageBody(bodyEl, "assistant", rawContent);
+      actionsEl.hidden = !rawContent.trim();
       scrollMessagesToBottom();
     },
     appendThinkingDelta(delta) {
@@ -1792,6 +1994,7 @@ function createStreamingAssistantMessage(initialText) {
       if (Array.isArray(payload.warnings)) {
         setWarnings(payload.warnings);
       }
+      actionsEl.hidden = !rawContent.trim();
     },
     getContent() {
       return rawContent;
@@ -2492,6 +2695,9 @@ async function sendMessage(message) {
     pendingSessionIds.delete(requestSessionId);
     refreshChatPendingState();
     renderSessionList();
+    if (inboxFiles.length > 0 || /ingest|inbox/i.test(message)) {
+      void refreshInboxFiles({ open: inboxPanelOpen, highlightPath: highlightedInboxPath });
+    }
   }
 }
 
@@ -2629,49 +2835,6 @@ ingestInboxPanelButtonEl?.addEventListener("click", () => {
   setInboxFeedback("已把“ingest inbox”提示词插入输入框。");
   showSettingsHint("ingest 提示词已插入输入框");
 });
-
-function bindInboxDropTarget(target) {
-  if (!target) {
-    return;
-  }
-  target.addEventListener("dragenter", (event) => {
-    if (!eventHasFiles(event)) {
-      return;
-    }
-    event.preventDefault();
-    inboxDragDepth += 1;
-    setInboxDragState(true);
-  });
-  target.addEventListener("dragover", (event) => {
-    if (!eventHasFiles(event)) {
-      return;
-    }
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-    setInboxDragState(true);
-  });
-  target.addEventListener("dragleave", (event) => {
-    if (!eventHasFiles(event)) {
-      return;
-    }
-    event.preventDefault();
-    inboxDragDepth = Math.max(0, inboxDragDepth - 1);
-    if (inboxDragDepth === 0) {
-      setInboxDragState(false);
-    }
-  });
-  target.addEventListener("drop", async (event) => {
-    if (!eventHasFiles(event)) {
-      return;
-    }
-    event.preventDefault();
-    resetInboxDragState();
-    await uploadInboxFiles(event.dataTransfer?.files);
-  });
-}
-
-bindInboxDropTarget(toggleInboxPanelButtonEl);
-bindInboxDropTarget(inboxPanelEl);
 
 modelButtonEl?.addEventListener("click", () => {
   if (modelButtonEl.disabled) {

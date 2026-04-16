@@ -58,6 +58,16 @@ def _safe_wiki_path(relative_path: str) -> Path:
     return candidate
 
 
+def _safe_wiki_target_path(relative_path: str) -> Path:
+    wiki_dir = _wiki_dir().resolve()
+    candidate = (wiki_dir / relative_path).resolve()
+    if wiki_dir not in candidate.parents and candidate != wiki_dir:
+        raise ValueError("Path must stay inside knowledge-base/wiki.")
+    if candidate.suffix != ".md":
+        raise ValueError("Only markdown pages are supported.")
+    return candidate
+
+
 def _page_record(path: Path, include_content: bool = False) -> dict[str, Any]:
     text = _read_text(path)
     wiki_dir = _wiki_dir()
@@ -86,6 +96,18 @@ def list_pages() -> list[dict[str, Any]]:
 
 def get_page(relative_path: str) -> dict[str, Any]:
     return _page_record(_safe_wiki_path(relative_path), include_content=True)
+
+
+def save_page(relative_path: str, content: str) -> dict[str, Any]:
+    path = _safe_wiki_target_path(relative_path)
+    if not path.exists():
+        raise FileNotFoundError(relative_path)
+
+    normalized_content = str(content).replace("\r\n", "\n")
+    temp_path = path.with_name(f".{path.name}.tmp")
+    temp_path.write_text(normalized_content, encoding="utf-8")
+    temp_path.replace(path)
+    return _page_record(path, include_content=True)
 
 
 def _match_score(query: str, page: dict[str, Any]) -> int:

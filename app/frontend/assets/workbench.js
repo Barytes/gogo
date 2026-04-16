@@ -79,6 +79,7 @@ const diagnosticsState = {
   loadedAt: 0,
   data: null,
 };
+let desktopPiLoginPollToken = 0;
 const desktopBridge =
   typeof window !== "undefined" &&
   window.GogoDesktop &&
@@ -1044,7 +1045,12 @@ function openSettingsPanel() {
   clearSettingsFeedback();
 }
 
+function cancelDesktopPiLoginPolling() {
+  desktopPiLoginPollToken += 1;
+}
+
 function closeSettingsPanel() {
+  cancelDesktopPiLoginPolling();
   settingsOverlayEl?.classList.add("hidden");
   clearSettingsFeedback();
 }
@@ -1152,6 +1158,7 @@ async function refreshPiOptionsAfterProviderChange() {
 }
 
 async function triggerDesktopPiLogin(providerKey) {
+  const pollToken = ++desktopPiLoginPollToken;
   const watchedProviderKey = String(providerKey || "").trim();
   const previousProfile = watchedProviderKey ? providerProfileByKey(watchedProviderKey) : null;
   const previousFingerprint = providerDesktopLoginFingerprint(previousProfile);
@@ -1170,8 +1177,14 @@ async function triggerDesktopPiLogin(providerKey) {
     const deadline = Date.now() + DESKTOP_PI_LOGIN_TIMEOUT_MS;
     while (Date.now() < deadline) {
       await sleep(DESKTOP_PI_LOGIN_POLL_INTERVAL_MS);
+      if (pollToken !== desktopPiLoginPollToken || settingsOverlayEl?.classList.contains("hidden")) {
+        return;
+      }
       await loadAppSettings();
       await refreshPiOptionsAfterProviderChange();
+      if (pollToken !== desktopPiLoginPollToken || settingsOverlayEl?.classList.contains("hidden")) {
+        return;
+      }
       if (watchedProviderKey) {
         const latestProfile = providerProfileByKey(watchedProviderKey);
         if (!latestProfile) {
@@ -1191,7 +1204,9 @@ async function triggerDesktopPiLogin(providerKey) {
       "Pi 终端已经打开；如果你还在登录中，请在终端中手动输入 `/login`。如果已经登录成功但状态未刷新，重新打开设置面板即可看到最新状态。"
     );
   } catch (error) {
-    setProviderFeedback(String(error.message || error), true);
+    if (pollToken === desktopPiLoginPollToken) {
+      setProviderFeedback(String(error.message || error), true);
+    }
   }
 }
 
@@ -1352,4 +1367,5 @@ window.WorkbenchUI = {
   ensureChatVisible: showChat,
   ensureWikiVisible: showWiki,
   getAppSettings: () => appSettings,
+  showToast: showSettingsToast,
 };

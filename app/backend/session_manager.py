@@ -132,6 +132,9 @@ class SessionPool:
             return {}
         try:
             raw = self._registry_file.read_text(encoding="utf-8")
+            if not raw.strip():
+                logger.info("Session registry is empty, treating it as a fresh registry: %s", self._registry_file)
+                return {}
             data = json.loads(raw)
         except Exception:
             logger.warning("Failed to load session registry: %s", self._registry_file, exc_info=True)
@@ -162,10 +165,12 @@ class SessionPool:
             ),
         }
         self._registry_file.parent.mkdir(parents=True, exist_ok=True)
-        self._registry_file.write_text(
+        temp_file = self._registry_file.with_name(f"{self._registry_file.name}.tmp")
+        temp_file.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        temp_file.replace(self._registry_file)
 
     def _sync_registry_from_session(self, session: SessionProcess) -> None:
         self._registry[session.session_id] = {
