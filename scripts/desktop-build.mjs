@@ -76,11 +76,21 @@ async function clearDirectory(directory, { keep = [] } = {}) {
 
 function spawnChecked(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: appRoot,
-      stdio: "inherit",
-      ...options,
-    });
+    const isWindowsBatch =
+      process.platform === "win32"
+      && /\.(cmd|bat)$/i.test(String(command));
+    const child = isWindowsBatch
+      ? spawn("cmd.exe", ["/d", "/s", "/c", `"${command}"`, ...args], {
+          cwd: appRoot,
+          stdio: "inherit",
+          windowsVerbatimArguments: true,
+          ...options,
+        })
+      : spawn(command, args, {
+          cwd: appRoot,
+          stdio: "inherit",
+          ...options,
+        });
     child.on("error", reject);
     child.on("exit", (code, signal) => {
       if (signal) {

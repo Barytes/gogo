@@ -101,7 +101,7 @@
 - 用户无需克隆源码仓库
 - 用户无需安装 Node、Rust、或手动运行 `uvicorn`
 - 用户通过标准安装介质完成安装
-  - Windows：首发先提供 `msi`
+  - Windows：首发先提供 `NSIS setup.exe`
   - macOS：如 `.app + dmg`
 - 应用启动后能够以面向用户的方式完成：
   - 静默检测并安装 `pi`
@@ -121,7 +121,7 @@
 |---|---|---|---|
 | Web 版（源码启动） | 已支持，但不是正式对外产品形态 | 开发者 / 技术用户 | Python 环境、`uv` 或可用 `python + uvicorn`、本地 knowledge-base |
 | Tauri 桌面开发版（源码启动） | 已支持，但属于开发态 | 开发者 / 内测用户 | Node `22/24`、Rust、Python 环境、本地 knowledge-base；若未提供 bundled / system `pi`，fallback 安装链路仍需要 `npm` |
-| Windows 最终用户安装包 | 目标明确，但未完成 | 普通最终用户 | 首发安装介质策略已收敛为 `msi`，但当前仍不应承诺可直接使用 |
+| Windows 最终用户安装包 | 目标明确，但未完成 | 普通最终用户 | 首发安装介质策略已收敛为 `NSIS setup.exe`，但当前仍不应承诺可直接使用 |
 | macOS 最终用户安装包 | 目标明确，但未完成 | 普通最终用户 | 当前仍不应承诺可直接使用 |
 
 当前建议的对外口径是：

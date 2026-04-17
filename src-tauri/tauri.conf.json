@@ -14,7 +14,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["msi", "app", "dmg"],
+    "targets": ["nsis", "app", "dmg"],
     "resources": {
       "../app/": "app",
       "./desktop-runtime-staging/backend/": "backend-runtime",

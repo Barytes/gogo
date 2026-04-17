@@ -129,9 +129,9 @@ GOGO_DESKTOP_PI_BINARY=../pi-runtime/macos-arm64/pi npm run desktop:build -- --d
 
 当前首发策略先收敛为：
 
-- **`msi`**
+- **NSIS `-setup.exe`**
 
-暂不把 NSIS `-setup.exe` 作为首发必做项。
+当前不再把 `msi` 作为首发必做项。
 
 ### 5.3 建议的 `pi` runtime 目录
 
@@ -167,7 +167,7 @@ npm run desktop:build -- --debug
 当前目标是至少产出：
 
 - `backend-runtime/gogo-backend.exe`
-- 最终安装介质 `msi`
+- 最终安装介质 `NSIS setup.exe`
 
 ### 5.6 需要 Windows 侧继续验证的点
 
@@ -227,6 +227,6 @@ gogo/
 
 1. 在 Windows 主机准备 `../pi-runtime/windows-x64/pi.exe`
 2. 按本指南执行 `npm run desktop:build`
-3. 验证能否产出 `backend-runtime/gogo-backend.exe` 与 `msi`
+3. 验证能否产出 `backend-runtime/gogo-backend.exe` 与 `NSIS setup.exe`
 4. 验证 bundled `pi` 登录链
 5. 再继续完成 4.3

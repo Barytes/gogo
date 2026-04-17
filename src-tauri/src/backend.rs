@@ -1,5 +1,7 @@
 use std::env;
 use std::fs;
+#[cfg(target_os = "windows")]
+use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -12,6 +14,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
 use serde::Serialize;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 const BACKEND_HOST: &str = "127.0.0.1";
 const HEALTH_PATH: &str = "/api/health";
@@ -19,6 +23,8 @@ const HEALTH_TIMEOUT: Duration = Duration::from_secs(30);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const BRIDGE_POLL_INTERVAL: Duration = Duration::from_millis(150);
 const PI_PACKAGE_NAME: &str = "@mariozechner/pi-coding-agent";
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Default)]
 struct PiInstallerState {
@@ -278,9 +284,6 @@ fn spawn_backend(
     command
         .args(&launcher.args)
         .current_dir(app_root)
-        .stdin(Stdio::null())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
         .env("GOGO_RUNTIME", "desktop")
         .env("GOGO_APP_ROOT", app_root)
         .env("GOGO_APP_STATE_DIR", app_state_dir)
@@ -298,9 +301,46 @@ fn spawn_backend(
         .env("GOGO_DESKTOP_BRIDGE_URL", bridge_url)
         .env("PYTHONUNBUFFERED", "1");
 
+    configure_backend_command_stdio(&mut command, app_state_dir)?;
+
     command
         .spawn()
         .with_context(|| format!("failed to spawn `{}`", launcher.program))
+}
+
+fn configure_backend_command_stdio(command: &mut Command, app_state_dir: &Path) -> Result<()> {
+    command.stdin(Stdio::null());
+
+    #[cfg(target_os = "windows")]
+    {
+        let log_path = backend_log_path(app_state_dir);
+        if let Some(parent) = log_path.parent() {
+            fs::create_dir_all(parent).context("failed to create backend log directory")?;
+        }
+        let stdout = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .with_context(|| format!("failed to open backend log file `{}`", log_path.display()))?;
+        let stderr = stdout
+            .try_clone()
+            .context("failed to clone backend log handle")?;
+        command
+            .stdout(Stdio::from(stdout))
+            .stderr(Stdio::from(stderr))
+            .creation_flags(CREATE_NO_WINDOW);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+    }
+
+    Ok(())
+}
+
+fn backend_log_path(app_state_dir: &Path) -> PathBuf {
+    app_state_dir.join("logs/backend.log")
 }
 
 fn wait_for_backend_ready(child: &mut Child, port: u16) -> Result<()> {
@@ -924,7 +964,7 @@ fn launch_desktop_pi_login(app_root: &Path, app_state_dir: &Path) -> Result<Desk
     #[cfg(target_os = "windows")]
     {
         let shell_command = build_pi_terminal_cmd_command(app_root, app_state_dir);
-        launch_windows_terminal(shell_command)?;
+        launch_windows_terminal(app_root, shell_command)?;
         return Ok(DesktopLoginResponse {
             success: true,
             detail:
@@ -960,6 +1000,7 @@ fn build_pi_terminal_shell_command(app_root: &Path, app_state_dir: &Path) -> Str
 #[cfg(target_os = "windows")]
 fn build_pi_terminal_cmd_command(app_root: &Path, app_state_dir: &Path) -> String {
     let spec = build_pi_command_spec(app_root, app_state_dir);
+    let app_root = normalize_windows_shell_path(app_root);
     let mut parts = vec![format!(
         "cd /d {}",
         windows_cmd_quote(app_root.to_string_lossy().as_ref())
@@ -972,10 +1013,11 @@ fn build_pi_terminal_cmd_command(app_root: &Path, app_state_dir: &Path) -> Strin
 
 fn build_pi_command_spec(app_root: &Path, app_state_dir: &Path) -> PiCommandSpec {
     let pi_program = preferred_pi_command_path(app_root, app_state_dir)
-        .map(|path| path.to_string_lossy().into_owned())
+        .map(|path| normalize_windows_shell_path(&path).to_string_lossy().into_owned())
         .or_else(|| {
             env::var("PI_COMMAND")
                 .ok()
+                .map(|value| normalize_windows_shell_value(value.trim()))
                 .filter(|value| !value.trim().is_empty())
         })
         .unwrap_or_else(|| "pi".to_string());
@@ -984,7 +1026,11 @@ fn build_pi_command_spec(app_root: &Path, app_state_dir: &Path) -> PiCommandSpec
     let managed_extension = app_state_dir.join("pi-extensions/managed-providers.ts");
     if managed_extension.exists() {
         args.push("--extension".to_string());
-        args.push(managed_extension.to_string_lossy().into_owned());
+        args.push(
+            normalize_windows_shell_path(&managed_extension)
+                .to_string_lossy()
+                .into_owned(),
+        );
     }
 
     PiCommandSpec {
@@ -1044,10 +1090,11 @@ fn run_osascript(lines: &[String]) -> Result<()> {
 }
 
 #[cfg(target_os = "windows")]
-fn launch_windows_terminal(shell_command: String) -> Result<()> {
+fn launch_windows_terminal(app_root: &Path, shell_command: String) -> Result<()> {
     Command::new("cmd.exe")
         .arg("/K")
         .arg(shell_command)
+        .current_dir(normalize_windows_shell_path(app_root))
         .spawn()
         .context("failed to launch cmd.exe for Pi login")?;
     Ok(())
@@ -1070,6 +1117,32 @@ fn is_windows_batch_script(value: &str) -> bool {
         .rsplit_once('.')
         .map(|(_, extension)| matches!(extension.to_ascii_lowercase().as_str(), "cmd" | "bat"))
         .unwrap_or(false)
+}
+
+#[cfg(target_os = "windows")]
+fn normalize_windows_shell_path(path: &Path) -> PathBuf {
+    PathBuf::from(normalize_windows_shell_value(path.to_string_lossy().as_ref()))
+}
+
+#[cfg(target_os = "windows")]
+fn normalize_windows_shell_value(value: &str) -> String {
+    if let Some(rest) = value.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{rest}");
+    }
+    if let Some(rest) = value.strip_prefix(r"\\?\") {
+        return rest.to_string();
+    }
+    value.to_string()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn normalize_windows_shell_path(path: &Path) -> PathBuf {
+    path.to_path_buf()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn normalize_windows_shell_value(value: &str) -> String {
+    value.to_string()
 }
 
 fn shell_quote(value: &str) -> String {

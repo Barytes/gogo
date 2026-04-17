@@ -30,7 +30,7 @@ pub async fn select_knowledge_base_directory(app: AppHandle) -> Result<Option<St
 
     let path = file_path
         .into_path()
-        .map_err(|error| format!("无法解析目录路径：{error}"))?;
+        .map_err(|error| format!("failed to resolve selected directory path: {error}"))?;
 
     Ok(Some(path.to_string_lossy().into_owned()))
 }
@@ -39,7 +39,7 @@ pub async fn select_knowledge_base_directory(app: AppHandle) -> Result<Option<St
 pub fn open_path(path: String) -> Result<(), String> {
     let target = path.trim();
     if target.is_empty() {
-        return Err("路径不能为空。".to_string());
+        return Err("path cannot be empty".to_string());
     }
 
     let mut command = if cfg!(target_os = "macos") {
@@ -48,7 +48,7 @@ pub fn open_path(path: String) -> Result<(), String> {
         command
     } else if cfg!(target_os = "windows") {
         let mut command = Command::new("explorer");
-        command.arg(target);
+        command.arg(normalize_windows_shell_value(target));
         command
     } else {
         let mut command = Command::new("xdg-open");
@@ -59,5 +59,21 @@ pub fn open_path(path: String) -> Result<(), String> {
     command
         .spawn()
         .map(|_| ())
-        .map_err(|error| format!("打开路径失败：{error}"))
+        .map_err(|error| format!("failed to open path: {error}"))
+}
+
+#[cfg(target_os = "windows")]
+fn normalize_windows_shell_value(value: &str) -> String {
+    if let Some(rest) = value.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{rest}");
+    }
+    if let Some(rest) = value.strip_prefix(r"\\?\") {
+        return rest.to_string();
+    }
+    value.to_string()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn normalize_windows_shell_value(value: &str) -> String {
+    value.to_string()
 }
