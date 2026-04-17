@@ -33,7 +33,16 @@ htmlcov/
 .gogo/
 
 # Desktop build artifacts
+.cache/
 dist/
 dist-electron/
+src-tauri/desktop-runtime/
+src-tauri/desktop-runtime-staging/*
+!src-tauri/desktop-runtime-staging/backend/
+!src-tauri/desktop-runtime-staging/pi/
+src-tauri/desktop-runtime-staging/backend/*
+!src-tauri/desktop-runtime-staging/backend/.gitkeep
+src-tauri/desktop-runtime-staging/pi/*
+!src-tauri/desktop-runtime-staging/pi/.gitkeep
 src-tauri/target/
 src-tauri/gen/

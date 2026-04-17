@@ -12,15 +12,38 @@ from typing import Any
 from dotenv import load_dotenv
 
 
-APP_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_KNOWLEDGE_BASE_DIR = APP_ROOT.parent / "knowledge-base"
-APP_STATE_DIR = (APP_ROOT.parent / ".gogo").resolve()
+_APP_ROOT_ENV = os.getenv("GOGO_APP_ROOT")
+APP_ROOT = (
+    Path(_APP_ROOT_ENV).expanduser().resolve()
+    if _APP_ROOT_ENV
+    else Path(__file__).resolve().parents[2]
+)
+_DEFAULT_KNOWLEDGE_BASE_DIR_ENV = os.getenv("GOGO_DEFAULT_KNOWLEDGE_BASE_DIR")
+DEFAULT_KNOWLEDGE_BASE_DIR = (
+    Path(_DEFAULT_KNOWLEDGE_BASE_DIR_ENV).expanduser().resolve()
+    if _DEFAULT_KNOWLEDGE_BASE_DIR_ENV
+    else (APP_ROOT.parent / "knowledge-base").resolve()
+)
+_COMPANION_KNOWLEDGE_BASE_TEMPLATE_DIR_ENV = os.getenv("GOGO_COMPANION_KNOWLEDGE_BASE_TEMPLATE_DIR")
+COMPANION_KNOWLEDGE_BASE_TEMPLATE_DIR = (
+    Path(_COMPANION_KNOWLEDGE_BASE_TEMPLATE_DIR_ENV).expanduser().resolve()
+    if _COMPANION_KNOWLEDGE_BASE_TEMPLATE_DIR_ENV
+    else DEFAULT_KNOWLEDGE_BASE_DIR
+)
+_APP_STATE_DIR_ENV = os.getenv("GOGO_APP_STATE_DIR")
+APP_STATE_DIR = (
+    Path(_APP_STATE_DIR_ENV).expanduser().resolve()
+    if _APP_STATE_DIR_ENV
+    else (APP_ROOT.parent / ".gogo").resolve()
+)
 APP_SETTINGS_FILE = APP_STATE_DIR / "app-settings.json"
 PI_AGENT_DIR = Path.home() / ".pi" / "agent"
 PI_AUTH_FILE = PI_AGENT_DIR / "auth.json"
 PI_SETTINGS_FILE = PI_AGENT_DIR / "settings.json"
 PI_EXTENSION_DIR = APP_STATE_DIR / "pi-extensions"
 PI_MANAGED_PROVIDER_EXTENSION = PI_EXTENSION_DIR / "managed-providers.ts"
+BUNDLED_PI_DIR = APP_ROOT / "pi-runtime"
+PI_RUNTIME_DIR = APP_STATE_DIR / "pi-runtime"
 MODEL_PROVIDER_PROFILES_KEY = "model_provider_profiles"
 GOGO_RUNTIME = str(os.getenv("GOGO_RUNTIME") or "web").strip().lower() or "web"
 PROVIDER_AUTH_MODE_DESKTOP = "desktop-pi-login"
@@ -98,6 +121,39 @@ def _trimmed(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _is_valid_knowledge_base_dir(path: Path) -> bool:
+    return (
+        path.exists()
+        and path.is_dir()
+        and (path / "wiki").is_dir()
+        and (path / "raw").is_dir()
+    )
+
+
+def _ensure_default_knowledge_base_dir() -> Path:
+    candidate = DEFAULT_KNOWLEDGE_BASE_DIR
+    return _ensure_companion_knowledge_base_dir(candidate)
+
+
+def _ensure_companion_knowledge_base_dir(candidate: Path) -> Path:
+    candidate = candidate.resolve()
+    if _is_valid_knowledge_base_dir(candidate):
+        return candidate
+
+    template_dir = COMPANION_KNOWLEDGE_BASE_TEMPLATE_DIR
+    if not is_desktop_runtime() or not _is_valid_knowledge_base_dir(template_dir):
+        return candidate
+
+    candidate.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        template_dir,
+        candidate,
+        dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns(".git", ".obsidian", ".claude", "__pycache__", ".DS_Store"),
+    )
+    return candidate
+
+
 def get_gogo_runtime() -> str:
     return "desktop" if GOGO_RUNTIME == "desktop" else "web"
 
@@ -107,8 +163,10 @@ def is_desktop_runtime() -> bool:
 
 
 def _resolve_knowledge_base_dir(raw_path: str | None) -> Path:
-    base_dir = Path(raw_path).expanduser() if raw_path else DEFAULT_KNOWLEDGE_BASE_DIR
-    return base_dir.resolve()
+    if raw_path:
+        base_dir = Path(raw_path).expanduser().resolve()
+        return _ensure_companion_knowledge_base_dir(base_dir)
+    return _ensure_default_knowledge_base_dir()
 
 
 def get_knowledge_base_dir() -> Path:
@@ -169,13 +227,11 @@ def get_knowledge_base_settings() -> dict[str, object]:
 
 def set_knowledge_base_dir(raw_path: str) -> dict[str, object]:
     candidate = _resolve_knowledge_base_dir(raw_path.strip())
-    wiki_dir = candidate / "wiki"
-    raw_dir = candidate / "raw"
     if not candidate.exists() or not candidate.is_dir():
         raise ValueError("知识库路径不存在，或不是目录。")
-    if not wiki_dir.exists() or not wiki_dir.is_dir():
+    if not (candidate / "wiki").is_dir():
         raise ValueError("知识库目录下缺少 `wiki/` 子目录。")
-    if not raw_dir.exists() or not raw_dir.is_dir():
+    if not (candidate / "raw").is_dir():
         raise ValueError("知识库目录下缺少 `raw/` 子目录。")
 
     settings = _load_app_settings()
@@ -192,7 +248,37 @@ def get_pi_command() -> str:
     return os.getenv("PI_COMMAND", "pi").strip() or "pi"
 
 
+def get_managed_pi_command_path() -> str | None:
+    candidates = [
+        PI_RUNTIME_DIR / "node_modules" / ".bin" / "pi",
+        PI_RUNTIME_DIR / "node_modules" / ".bin" / "pi.cmd",
+        PI_RUNTIME_DIR / "node_modules" / ".bin" / "pi.exe",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate.resolve())
+    return None
+
+
+def get_bundled_pi_command_path() -> str | None:
+    candidates = [
+        BUNDLED_PI_DIR / "pi",
+        BUNDLED_PI_DIR / "pi.exe",
+        BUNDLED_PI_DIR / "pi.cmd",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate.resolve())
+    return None
+
+
 def get_pi_command_path() -> str | None:
+    bundled = get_bundled_pi_command_path()
+    if bundled:
+        return bundled
+    managed = get_managed_pi_command_path()
+    if managed:
+        return managed
     configured = shutil.which(get_pi_command())
     if configured:
         return configured
@@ -232,7 +318,7 @@ def get_pi_rpc_session_dir() -> Path:
     if raw_path:
         base_dir = Path(raw_path).expanduser().resolve()
     else:
-        base_dir = (APP_ROOT.parent / ".gogo" / "pi-rpc-sessions").resolve()
+        base_dir = (APP_STATE_DIR / "pi-rpc-sessions").resolve()
     return (base_dir / _knowledge_base_session_namespace(get_knowledge_base_dir())).resolve()
 
 

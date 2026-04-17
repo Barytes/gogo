@@ -11,6 +11,14 @@ const openSettingsButtonEl = document.querySelector("#open-settings-panel");
 const closeSettingsButtonEl = document.querySelector("#close-settings-panel");
 const settingsOverlayEl = document.querySelector("#settings-overlay");
 const settingsToastViewportEl = document.querySelector("#settings-toast-viewport");
+const startupOverlayEl = document.querySelector("#startup-overlay");
+const startupTitleEl = document.querySelector("#startup-title");
+const startupDescriptionEl = document.querySelector("#startup-description");
+const startupStatusListEl = document.querySelector("#startup-status-list");
+const startupFeedbackEl = document.querySelector("#startup-feedback");
+const startupInstallPiButtonEl = document.querySelector("#startup-install-pi-button");
+const startupRetryButtonEl = document.querySelector("#startup-retry-button");
+const startupContinueButtonEl = document.querySelector("#startup-continue-button");
 const settingsNavButtonEls = Array.from(document.querySelectorAll("[data-settings-section]"));
 const settingsSectionPaneEls = Array.from(document.querySelectorAll("[data-settings-section-pane]"));
 const knowledgeBasePathInputEl = document.querySelector("#knowledge-base-path-input");
@@ -68,9 +76,11 @@ const providerOauthIntroShellEl = document.querySelector("#provider-oauth-intro-
 const providerApiActionsEl = document.querySelector("#provider-api-actions");
 const importProviderJsonButtonEl = document.querySelector("#import-provider-json-button");
 const saveProviderButtonEl = document.querySelector("#save-provider-button");
+const providerInstallPiButtonEl = document.querySelector("#provider-install-pi-button");
 const providerDesktopLoginButtonEl = document.querySelector("#provider-desktop-login-button");
 const resetProviderButtonEl = document.querySelector("#reset-provider-button");
 const providerFeedbackEl = document.querySelector("#provider-settings-feedback");
+const installPiButtonEl = document.querySelector("#install-pi-button");
 const refreshDiagnosticsButtonEl = document.querySelector("#refresh-diagnostics-button");
 const diagnosticsFeedbackEl = document.querySelector("#diagnostics-feedback");
 const diagnosticsStatusChipsEl = document.querySelector("#diagnostics-status-chips");
@@ -114,6 +124,8 @@ const capabilityAgentsGuidanceState = {
   text: "",
 };
 let desktopPiLoginPollToken = 0;
+let startupOverlayDismissed = false;
+let startupPiInstallPolling = false;
 const desktopBridge =
   typeof window !== "undefined" &&
   window.GogoDesktop &&
@@ -314,6 +326,110 @@ function setDiagnosticsFeedback(message, isError = false) {
 
 function setCapabilityFeedback(message, isError = false) {
   setFeedback(capabilityFeedbackEl, message, isError);
+}
+
+function setStartupFeedback(message, isError = false) {
+  setFeedback(startupFeedbackEl, message, isError);
+}
+
+function renderKeyValueList(element, items) {
+  if (!element) {
+    return;
+  }
+  element.innerHTML = "";
+  items.forEach(([label, value]) => {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    element.appendChild(dt);
+    element.appendChild(dd);
+  });
+}
+
+function shouldShowStartupOverlay() {
+  if (!isDesktopRuntime()) {
+    return false;
+  }
+  if (!appSettings) {
+    return true;
+  }
+  const status = piInstallStatus();
+  if (status.install_in_progress) {
+    return true;
+  }
+  if (status.installed) {
+    return false;
+  }
+  return !startupOverlayDismissed;
+}
+
+function renderStartupOverlay() {
+  if (!startupOverlayEl) {
+    return;
+  }
+
+  const show = shouldShowStartupOverlay();
+  startupOverlayEl.classList.toggle("hidden", !show);
+  if (!show) {
+    return;
+  }
+
+  if (!appSettings) {
+    startupTitleEl && (startupTitleEl.textContent = "正在检查桌面环境");
+    startupDescriptionEl &&
+      (startupDescriptionEl.textContent = "gogo-app 正在确认本地知识库工作台所需的运行环境，请稍候。");
+    renderKeyValueList(startupStatusListEl, [["状态", "正在读取当前设置与运行时状态"]]);
+    startupInstallPiButtonEl && (startupInstallPiButtonEl.disabled = true);
+    startupRetryButtonEl?.classList.add("hidden");
+    startupContinueButtonEl && (startupContinueButtonEl.disabled = true);
+    setStartupFeedback("");
+    return;
+  }
+
+  const status = piInstallStatus();
+  const installSupported = Boolean(status.install_supported);
+  const installed = Boolean(status.installed);
+  const inProgress = Boolean(status.install_in_progress);
+
+  startupContinueButtonEl && (startupContinueButtonEl.disabled = false);
+  startupRetryButtonEl?.classList.toggle("hidden", inProgress);
+
+  if (installed) {
+    startupOverlayEl.classList.add("hidden");
+    return;
+  }
+
+  if (inProgress) {
+    startupTitleEl && (startupTitleEl.textContent = "正在安装 Pi");
+    startupDescriptionEl &&
+      (startupDescriptionEl.textContent =
+        "gogo-app 正在后台准备 Pi 运行时。安装完成后，你就可以继续走 `/login`、聊天、ingest 和写回链路。");
+  } else if (installSupported) {
+    startupTitleEl && (startupTitleEl.textContent = "先安装 Pi，再进入完整工作流");
+    startupDescriptionEl &&
+      (startupDescriptionEl.textContent =
+        "检测到当前机器上还没有可用的 `pi`。你可以现在安装，gogo-app 会把它放到自己的托管目录，不会写进你的知识库。");
+  } else {
+    startupTitleEl && (startupTitleEl.textContent = "当前还不能自动安装 Pi");
+    startupDescriptionEl &&
+      (startupDescriptionEl.textContent =
+        "这台机器上暂时没有检测到可用的 `npm`，所以 gogo-app 现在还没法自动补齐 `pi`。你仍然可以先进入工作台浏览 Wiki。");
+  }
+
+  renderKeyValueList(startupStatusListEl, [
+    ["平台", diagnosticsValue(status.platform)],
+    ["Pi", diagnosticsValue(status.command_path || status.command, "未检测到")],
+    ["来源", diagnosticsValue(status.command_source, "待安装")],
+    ["npm", diagnosticsValue(status.npm_command_path, installSupported ? "可用" : "未检测到")],
+    ["日志", diagnosticsValue(status.install_log_path)],
+    ["说明", diagnosticsValue(status.detail)],
+  ]);
+
+  if (startupInstallPiButtonEl) {
+    startupInstallPiButtonEl.disabled = inProgress || installed || !installSupported;
+    startupInstallPiButtonEl.textContent = inProgress ? "正在安装 Pi..." : "安装 Pi";
+  }
 }
 
 function clearSettingsFeedback() {
@@ -879,6 +995,7 @@ function renderDiagnostics() {
   const providers = payload?.providers || {};
   const defaults = providers.defaults || {};
   const piRuntime = payload?.pi_runtime || {};
+  const piInstall = payload?.pi_install || piInstallStatus();
 
   if (diagnosticsStatusChipsEl) {
     diagnosticsStatusChipsEl.innerHTML = "";
@@ -886,6 +1003,7 @@ function renderDiagnostics() {
       `运行时：${diagnosticsValue(health.runtime)}`,
       `Pi RPC：${health.pi_rpc_available ? "可用" : "不可用"}`,
       `Pi 状态：${health.runtime_options_ok ? "已连通" : "拉取失败"}`,
+      `Pi 安装：${piInstall.install_in_progress ? "安装中" : piInstall.installed ? "已安装" : "待安装"}`,
       `知识库：${diagnosticsValue(knowledgeBase.name)}`,
     ];
     chips.forEach((label) => {
@@ -908,6 +1026,14 @@ function renderDiagnostics() {
   renderDiagnosticsList(diagnosticsPiListEl, [
     ["命令", diagnosticsValue(piRuntime.command)],
     ["命令路径", diagnosticsValue(piRuntime.command_path)],
+    ["打包命令", diagnosticsValue(piInstall.bundled_command_path)],
+    ["命令来源", diagnosticsValue(piInstall.command_source)],
+    ["打包目录", diagnosticsValue(piInstall.bundled_runtime_dir)],
+    ["托管命令", diagnosticsValue(piInstall.managed_command_path)],
+    ["npm", diagnosticsValue(piInstall.npm_command_path)],
+    ["支持应用内安装", diagnosticsValue(piInstall.install_supported)],
+    ["安装中", diagnosticsValue(piInstall.install_in_progress)],
+    ["安装日志", diagnosticsValue(piInstall.install_log_path)],
     ["超时", diagnosticsValue(piRuntime.timeout_seconds, "已关闭")],
     ["工作目录", diagnosticsValue(piRuntime.workdir)],
     ["默认思考", diagnosticsValue(piRuntime.default_thinking_level)],
@@ -916,6 +1042,7 @@ function renderDiagnostics() {
     ["可用模型数", diagnosticsValue(piRuntime.available_model_count)],
     ["可用 Provider 数", diagnosticsValue(piRuntime.available_provider_count)],
     ["Extension", Array.isArray(providers.extension_paths) && providers.extension_paths.length ? providers.extension_paths.join("\n") : "未加载"],
+    ["安装说明", diagnosticsValue(piInstall.detail)],
     ["Pi 错误", diagnosticsValue(piRuntime.runtime_error, "无")],
   ]);
 
@@ -1077,6 +1204,14 @@ function providerOauthAuthModes() {
 
 function providerCapabilities() {
   return appSettings?.model_providers?.capabilities || {};
+}
+
+function piInstallStatus() {
+  return appSettings?.pi_install || {};
+}
+
+function piInstalled() {
+  return Boolean(piInstallStatus().installed);
 }
 
 function formatMsToLocalInput(rawValue) {
@@ -1414,9 +1549,20 @@ function updateProviderAuthModeHelp() {
     return;
   }
   const desktopReady = Boolean(providerCapabilities().desktop_cli_login);
+  const installStatus = piInstallStatus();
   if (providerAuthMode === "manual-tokens") {
     providerAuthModeHelpEl.textContent =
       "当前会把 access / refresh token 直接写入 Pi 的 auth.json，适合作为 Web 版兼容方案，或给自定义 OAuth Provider 临时接入。";
+    return;
+  }
+  if (desktopReady && installStatus.install_in_progress) {
+    providerAuthModeHelpEl.textContent =
+      "Pi 正在后台安装中。安装完成后，直接点击“打开终端 Pi 登录”即可继续 `/login`。";
+    return;
+  }
+  if (desktopReady && !installStatus.installed) {
+    providerAuthModeHelpEl.textContent =
+      "当前还没有检测到可用的 Pi。可以先点击“安装 Pi”，gogo-app 会优先把 Pi 安装到自己的托管目录，再继续 `/login`。";
     return;
   }
   providerAuthModeHelpEl.textContent = desktopReady
@@ -1603,18 +1749,42 @@ function renderProviderProfiles() {
   });
 }
 
+function renderPiInstallActions() {
+  const status = piInstallStatus();
+  const installed = Boolean(status.installed);
+  const inProgress = Boolean(status.install_in_progress);
+  const installSupported = Boolean(status.install_supported);
+  const canInstallInApp = isDesktopRuntime() && (installSupported || installed || inProgress);
+
+  if (providerInstallPiButtonEl) {
+    providerInstallPiButtonEl.disabled = !canInstallInApp || inProgress || installed;
+    providerInstallPiButtonEl.textContent = inProgress ? "正在安装 Pi..." : installed ? "Pi 已安装" : "安装 Pi";
+  }
+
+  if (installPiButtonEl) {
+    installPiButtonEl.disabled = !canInstallInApp || inProgress || installed;
+    installPiButtonEl.textContent = inProgress ? "正在安装 Pi..." : installed ? "Pi 已安装" : "安装 Pi";
+  }
+
+  if (providerDesktopLoginButtonEl) {
+    providerDesktopLoginButtonEl.disabled = !installed || inProgress;
+  }
+}
+
 function renderModelProviderSettings() {
   renderApiTypeOptions();
   renderOauthPresetOptions();
   renderOauthAuthModeOptions();
   renderProviderProfiles();
   applyProviderMode(providerFormMode);
+  renderPiInstallActions();
 }
 
 function renderSettings() {
   renderKnowledgeBaseSettings();
   renderCapabilitySettings();
   renderModelProviderSettings();
+  renderStartupOverlay();
 }
 
 async function loadAppSettings() {
@@ -1624,6 +1794,9 @@ async function loadAppSettings() {
   }
   appSettings = await response.json();
   renderSettings();
+  if (piInstallStatus().install_in_progress && !startupPiInstallPolling) {
+    void pollPiInstallUntilSettled();
+  }
 }
 
 function openSettingsPanel() {
@@ -1741,6 +1914,76 @@ async function refreshPiOptionsAfterProviderChange() {
     await window.ChatWorkbench?.reloadPiOptions?.();
   } catch (error) {
     console.error("Failed to refresh Pi options after provider change:", error);
+  }
+}
+
+async function pollPiInstallUntilSettled() {
+  startupPiInstallPolling = true;
+  const deadline = Date.now() + 3 * 60 * 1000;
+  while (Date.now() < deadline) {
+    await sleep(2500);
+    await loadAppSettings();
+    await loadDiagnostics(true);
+    const status = piInstallStatus();
+    if (!status.install_in_progress) {
+      if (status.installed) {
+        setProviderFeedback("");
+        setDiagnosticsFeedback("");
+        setStartupFeedback("");
+        showSettingsToast("Pi 已安装完成，可以继续打开终端完成 `/login`。");
+      } else {
+        const detail = String(status.detail || "Pi 安装未完成，请查看诊断信息。");
+        setProviderFeedback(detail, true);
+        setDiagnosticsFeedback(detail, true);
+        setStartupFeedback(detail, true);
+      }
+      renderStartupOverlay();
+      startupPiInstallPolling = false;
+      return;
+    }
+  }
+
+  const timeoutMessage = "Pi 仍在后台安装中；如果等待较久，请刷新诊断信息并查看安装日志路径。";
+  setProviderFeedback(timeoutMessage);
+  setDiagnosticsFeedback(timeoutMessage);
+  setStartupFeedback(timeoutMessage);
+  renderStartupOverlay();
+  startupPiInstallPolling = false;
+}
+
+async function triggerPiInstall() {
+  startupOverlayDismissed = false;
+  renderPiInstallActions();
+  renderStartupOverlay();
+  setProviderFeedback("正在后台安装 Pi...");
+  setDiagnosticsFeedback("正在后台安装 Pi...");
+  setStartupFeedback("正在后台安装 Pi...");
+  try {
+    const response = await fetch("/api/settings/pi-install", {
+      method: "POST",
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.detail || `HTTP ${response.status}`);
+    }
+    appSettings = {
+      ...(appSettings || {}),
+      pi_install: data.pi_install || {},
+    };
+    renderSettings();
+    await loadDiagnostics(true);
+    showSettingsToast(data.detail || "Pi 安装流程已启动。");
+    if (piInstallStatus().install_in_progress && !startupPiInstallPolling) {
+      await pollPiInstallUntilSettled();
+    }
+  } catch (error) {
+    const message = `安装 Pi 失败：${error.message}`;
+    setProviderFeedback(message, true);
+    setDiagnosticsFeedback(message, true);
+    setStartupFeedback(message, true);
+  } finally {
+    renderPiInstallActions();
+    renderStartupOverlay();
   }
 }
 
@@ -1879,8 +2122,32 @@ providerAuthModeSelectEl?.addEventListener("change", () => {
 });
 saveProviderButtonEl?.addEventListener("click", saveProviderProfile);
 importProviderJsonButtonEl?.addEventListener("click", importProviderConfigFromModelsText);
+providerInstallPiButtonEl?.addEventListener("click", async () => {
+  await triggerPiInstall();
+});
+startupInstallPiButtonEl?.addEventListener("click", async () => {
+  await triggerPiInstall();
+});
+startupRetryButtonEl?.addEventListener("click", async () => {
+  startupOverlayDismissed = false;
+  setStartupFeedback("");
+  try {
+    await loadAppSettings();
+    await loadDiagnostics(true);
+  } catch (error) {
+    setStartupFeedback(`重新检查失败：${error.message}`, true);
+  }
+});
+startupContinueButtonEl?.addEventListener("click", () => {
+  startupOverlayDismissed = true;
+  setStartupFeedback("");
+  renderStartupOverlay();
+});
 providerDesktopLoginButtonEl?.addEventListener("click", async () => {
   await triggerDesktopPiLogin(String(providerKeyInputEl?.value || "").trim());
+});
+installPiButtonEl?.addEventListener("click", async () => {
+  await triggerPiInstall();
 });
 resetProviderButtonEl?.addEventListener("click", () => resetProviderForm(providerFormMode));
 refreshDiagnosticsButtonEl?.addEventListener("click", async () => {
@@ -1978,11 +2245,25 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+renderStartupOverlay();
+
 void loadAppSettings().catch((error) => {
   console.error("Failed to load app settings:", error);
   if (knowledgeBaseNameEl) {
     knowledgeBaseNameEl.textContent = "Knowledge Base";
   }
+  if (startupTitleEl) {
+    startupTitleEl.textContent = "启动检查失败";
+  }
+  if (startupDescriptionEl) {
+    startupDescriptionEl.textContent = "gogo-app 暂时没能读取当前桌面设置。你可以重新检查，或先进入工作台浏览 Wiki。";
+  }
+  renderKeyValueList(startupStatusListEl, [["错误", String(error.message || error)]]);
+  startupRetryButtonEl?.classList.remove("hidden");
+  startupContinueButtonEl && (startupContinueButtonEl.disabled = false);
+  startupInstallPiButtonEl && (startupInstallPiButtonEl.disabled = true);
+  setStartupFeedback(String(error.message || error), true);
+  startupOverlayEl?.classList.remove("hidden");
 });
 
 resetProviderForm("api");

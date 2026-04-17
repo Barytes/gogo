@@ -1,6 +1,6 @@
 # gogo-app Tauri 迁移方案
 
-**最后更新**: 2026-04-16
+**最后更新**: 2026-04-17
 
 > 本文档描述 `gogo-app` 从当前“Web 工作台 + 本地 FastAPI”形态迁移到 Tauri 桌面壳的推荐方案。  
 > 当前仓库里的 Electron 可执行代码与历史说明文档都已清理。
@@ -14,13 +14,35 @@
 - 已恢复前端 `window.GogoDesktop` bridge
 - 已恢复知识库目录选择按钮
 - `desktop:dev` 已通过 `beforeDevCommand` 自动启动本地 FastAPI，并让 Tauri 连接 `http://127.0.0.1:8000`
+- 已打通 Tauri bundle 资源映射，发布态可从 bundle resources 定位 `app/` 与 companion `knowledge-base/`
+- 已接入独立桌面后端 runtime：`desktop:build` 会先用 PyInstaller 构建 `backend-runtime/`，发布态优先启动 bundle 内的独立后端
+- 已把 `desktop:build` 重构为跨平台 Node 构建入口，不再依赖 Unix shell；默认只使用 `src-tauri/desktop-runtime-staging/` 作为 bundle 前的运行时 staging 目录
+- 已在发布态把默认 knowledge-base、session 与 Pi extension 等可写状态收口到 app data 目录
+- 已接入 companion knowledge-base 首次启动选址：当本地还没有已保存的知识库路径时，桌面版会先弹出系统目录选择器，并记住用户选择的 companion knowledge-base 位置
+- 已把 bundled `pi` 接入桌面打包链：构建时可通过 `GOGO_DESKTOP_PI_BINARY` 将上游 `pi` 运行目录收进 bundle resources，运行时优先使用
+- 已保留 `pi` 检测与启动前后台安装作为 fallback：仅当 bundled / system `pi` 都缺失时，桌面版才会展示启动引导，并通过 `npm` 把 `pi` 安装到 app data 下的托管 `pi-runtime/`
+- 已补齐 Windows 侧代码适配的基础骨架：桌面版登录桥现在会在 Windows 上通过 `cmd.exe` 拉起 bundled/system `pi` 并提示用户手动输入 `/login`；待 Windows 实机验收
+- 已验证 macOS 调试构建可产出 `.app + .dmg`
+- 已明确 Windows 首发安装介质先收敛到 `msi`；NSIS `-setup.exe` 暂不作为首发必做项
+- 已确认一个 macOS 分发边界：upstream `pi` 运行目录本身可能被 Gatekeeper / quarantine 拦截，因此不能裸分发；后续应作为 `gogo-app.app` 的内嵌运行时统一签名，并纳入主应用 notarization
 - `src-tauri/icons/icon.png` 当前先使用临时占位图标，后续应替换为 gogo-app 正式图标资产
+
+当前已经踩过并修复的一个关键坑：
+
+- **不要用 `cfg!(debug_assertions)` 区分 `tauri dev` 和“打包后的 debug 构建”**
+  - `cargo/tauri` 的 debug bundle 同样会带有 `debug_assertions`
+  - 如果用它判断“是否走开发态后端”，打包后的 debug `.app` 会错误地去连接 `http://127.0.0.1:8000`
+  - 实际表现就是：应用窗口打开，但没有本地 dev server 时直接白屏
+  - 当前修复方式是：在 `src-tauri/src/main.rs` 中改用 `tauri::is_dev()`，只有 `tauri dev` 才走开发服务器分支；所有打包产物都走 bundle 内后端
 
 当前还没有完成的是：
 
-- 本机 Rust 工具链校验
-- Pi CLI `/login` 桥
-- 打包内置 Python 运行时
+- 在 Windows 本机或 CI runner 上验证新的跨平台 `desktop:build`，确认能产出 `backend-runtime/gogo-backend.exe` 与最终 `msi`
+- 为 Windows 准备并验收 bundled `pi` 运行目录，确认 `pi.exe` 与其同目录运行时文件、OAuth `/login`、RPC 和 extension 链路都正常
+- 在 macOS 上验证 bundled `pi` 随主 app 一起签名 / notarize 后的可执行性，而不是只验证 upstream runtime 本地可运行
+- 把当前“启动前 fallback 安装 `pi`”继续前移到真正的安装器/首次启动向导，做到静默安装与普通用户无感补齐
+- Windows 代码签名 / macOS Developer ID + notarization
+- Windows 侧独立后端 runtime 与安装包链路验收
 
 ## 1. 迁移目标
 
@@ -74,7 +96,7 @@ Tauri 的优势是：
 
 - 把 FastAPI 改写进 Rust
 - 把前端改成完整 SPA 构建链
-- 在第一阶段打包内置 Python 运行时
+- 在第一阶段就追求完整的安装器静默预装与自动更新
 
 先把桌面壳跑通，再处理分发和内置运行时，会更稳。
 
@@ -185,6 +207,12 @@ triggerPiLogin(providerKey)
 - 启动体验已做一轮低风险优化：
   - 前端首屏优先恢复会话列表和最近活跃会话，`Pi options / slash / inbox` 改成后台预热
   - Tauri 端等待 FastAPI 就绪的健康检查轮询间隔从 `300ms` 收紧到 `100ms`，减少打包版起窗前的固定颗粒度等待
+- 发布态资源路径已改为显式映射：
+  - `app/` 与 `knowledge-base/` 会直接进入 bundle resources 下的稳定路径
+  - companion knowledge-base 在桌面发布态会默认从 bundle template provision 到可写目录，而不是直接在只读资源目录内工作
+- Debug bundle 白屏问题已经定位并修复：
+  - 根因不是资源未打包，而是打包后的 debug `.app` 曾误用开发态分支
+  - 修复后，debug `.app` 已可自动拉起 bundle 内 `backend-runtime`，并正常请求 `/`、静态资源与首屏初始化接口
 
 ## 9. 后端启动策略建议
 
@@ -228,9 +256,9 @@ Tauri 侧建议延续当前 Electron 版已经验证过的启动顺序：
 ```json
 {
   "scripts": {
-    "backend:dev": "sh ./scripts/tauri-backend-dev.sh",
+    "backend:dev": "node ./scripts/backend-dev.mjs",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build"
+    "desktop:build": "node ./scripts/desktop-build.mjs"
   }
 }
 ```

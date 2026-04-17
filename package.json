@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "backend:dev": "sh ./scripts/tauri-backend-dev.sh",
+    "backend:dev": "node ./scripts/backend-dev.mjs",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build"
+    "desktop:build": "node ./scripts/desktop-build.mjs"
   },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "latest"

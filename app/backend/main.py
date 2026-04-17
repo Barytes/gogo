@@ -22,10 +22,14 @@ from pydantic import BaseModel, Field
 
 from .agent_service import get_agent_backend_status, run_agent_chat, stream_agent_chat, run_session_chat, stream_session_chat
 from .config import (
+    BUNDLED_PI_DIR,
+    PI_RUNTIME_DIR,
+    get_bundled_pi_command_path,
     delete_model_provider_profile,
     get_gogo_runtime,
     get_knowledge_base_dir,
     get_knowledge_base_settings,
+    get_managed_pi_command_path,
     get_pi_command,
     get_model_provider_settings,
     get_pi_command_path,
@@ -50,7 +54,12 @@ from .session_manager import (
 )
 
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
+_APP_ROOT_ENV = os.getenv("GOGO_APP_ROOT")
+ROOT_DIR = (
+    Path(_APP_ROOT_ENV).expanduser().resolve()
+    if _APP_ROOT_ENV
+    else Path(__file__).resolve().parents[2]
+)
 FRONTEND_DIR = ROOT_DIR / "app" / "frontend"
 logger = logging.getLogger(__name__)
 NO_SESSION_DEPRECATION_MESSAGE = (
@@ -184,12 +193,65 @@ def _start_desktop_pi_login_direct() -> dict[str, object]:
     }
 
 
+def _local_pi_install_status() -> dict[str, object]:
+    command = get_pi_command()
+    command_path = get_pi_command_path()
+    bundled_command_path = get_bundled_pi_command_path()
+    managed_command_path = get_managed_pi_command_path()
+    install_log_path = str(PI_RUNTIME_DIR / "install.log")
+    command_source = ""
+    if bundled_command_path and command_path == bundled_command_path:
+        command_source = "bundled"
+    elif managed_command_path and command_path == managed_command_path:
+        command_source = "managed"
+    elif command_path:
+        command_source = "path"
+
+    detail = "已检测到可用的 `pi` 命令。"
+    if not command_path:
+        detail = "当前未检测到可用的 `pi` 命令；桌面版会优先尝试使用随包分发的 binary，缺失时再通过本地 npm 安装到 gogo-app 的托管目录。"
+
+    return {
+        "platform": platform.system().lower(),
+        "command": command,
+        "command_path": command_path,
+        "bundled_command_path": bundled_command_path,
+        "managed_command_path": managed_command_path,
+        "command_source": command_source,
+        "bundled_runtime_dir": str(BUNDLED_PI_DIR),
+        "runtime_dir": str(PI_RUNTIME_DIR),
+        "install_log_path": install_log_path,
+        "npm_command_path": None,
+        "installed": bool(command_path),
+        "install_supported": False,
+        "install_in_progress": False,
+        "detail": detail,
+    }
+
+
+def _get_pi_install_status() -> dict[str, object]:
+    if not (is_desktop_runtime() and _desktop_bridge_url()):
+        return _local_pi_install_status()
+
+    try:
+        payload = _post_to_desktop_bridge("/pi-status", {})
+    except RuntimeError as exc:
+        fallback = _local_pi_install_status()
+        fallback["detail"] = str(exc) or str(fallback.get("detail") or "")
+        return fallback
+
+    if not isinstance(payload, dict):
+        return _local_pi_install_status()
+    return payload
+
+
 def _build_settings_diagnostics() -> dict[str, object]:
     pool = get_session_pool()
     kb_dir = get_knowledge_base_dir()
     kb_settings = get_knowledge_base_settings()
     agent_status = get_agent_backend_status()
     provider_settings = get_model_provider_settings()
+    pi_install = _get_pi_install_status()
     session_dir = get_pi_rpc_session_dir()
     extension_paths = [str(path) for path in get_pi_extension_paths()]
 
@@ -225,6 +287,7 @@ def _build_settings_diagnostics() -> dict[str, object]:
             "agent_mode": agent_status.get("mode"),
             "pi_backend_mode": agent_status.get("pi_backend_mode"),
             "pi_rpc_available": bool(agent_status.get("pi_rpc_available")),
+            "pi_installed": bool(pi_install.get("installed")),
             "runtime_options_ok": not runtime_error,
         },
         "knowledge_base": {
@@ -260,6 +323,7 @@ def _build_settings_diagnostics() -> dict[str, object]:
             "available_provider_count": model_provider_count,
             "runtime_error": runtime_error,
         },
+        "pi_install": pi_install,
     }
 
 
@@ -536,6 +600,7 @@ def get_app_settings() -> dict[str, object]:
     return {
         "knowledge_base": get_knowledge_base_settings(),
         "model_providers": get_model_provider_settings(),
+        "pi_install": _get_pi_install_status(),
     }
 
 
@@ -597,9 +662,13 @@ def start_pi_login() -> dict[str, object]:
             detail="当前仍是 Web 版 gogo-app，暂时不能直接拉起 Pi CLI 登录。桌面版会通过这个接口打开本地 `pi`，并触发原生 `/login` 流程。",
         )
     if not get_pi_command_path():
+        pi_install = _get_pi_install_status()
         raise HTTPException(
             status_code=500,
-            detail="当前机器上没有可用的 `pi` 命令，无法拉起桌面版 Pi 登录。",
+            detail=str(
+                pi_install.get("detail")
+                or "当前机器上没有可用的 `pi` 命令，无法拉起桌面版 Pi 登录。"
+            ),
         )
 
     try:
@@ -618,6 +687,31 @@ def start_pi_login() -> dict[str, object]:
         ),
         "command_hint": str(bridge_result.get("command_hint") or "/login"),
         "model_providers": get_model_provider_settings(),
+    }
+
+
+@app.post("/api/settings/pi-install")
+def install_pi() -> dict[str, object]:
+    if not is_desktop_runtime():
+        raise HTTPException(
+            status_code=501,
+            detail="当前仍是 Web 版 gogo-app，暂时不能直接在应用内安装 Pi。",
+        )
+    if not _desktop_bridge_url():
+        raise HTTPException(
+            status_code=500,
+            detail="桌面桥地址缺失，无法触发 Pi 安装流程。",
+        )
+
+    try:
+        bridge_result = _post_to_desktop_bridge("/pi-install", {})
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "success": bool(bridge_result.get("success", True)),
+        "detail": str(bridge_result.get("detail") or "Pi 安装流程已启动。"),
+        "pi_install": _get_pi_install_status(),
     }
 
 

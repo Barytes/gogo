@@ -191,6 +191,74 @@ code {
   backdrop-filter: blur(8px);
 }
 
+.startup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top, rgba(177, 83, 47, 0.12), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(24, 92, 82, 0.18), transparent 34%),
+    rgba(246, 239, 228, 0.94);
+  backdrop-filter: blur(14px);
+}
+
+.startup-card {
+  width: min(680px, calc(100vw - 32px));
+  padding: 28px 30px 30px;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 251, 244, 0.98);
+  box-shadow: 0 30px 72px rgba(48, 40, 31, 0.18);
+  display: grid;
+  gap: 14px;
+}
+
+.startup-card h1 {
+  margin: 0;
+  font-family: var(--serif);
+  letter-spacing: -0.02em;
+}
+
+.startup-description,
+.startup-help {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.startup-status-list {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
+  gap: 10px 14px;
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(24, 92, 82, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.startup-status-list dt {
+  margin: 0;
+  font-weight: 700;
+}
+
+.startup-status-list dd {
+  margin: 0;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.startup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .settings-panel {
   width: min(1040px, calc(100vw - 32px));
   max-height: calc(100vh - 56px);

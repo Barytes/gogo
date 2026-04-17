@@ -7,6 +7,31 @@
     <link rel="stylesheet" href="/assets/styles.css?v=20260415-12" />
   </head>
   <body>
+    <div id="startup-overlay" class="startup-overlay">
+      <section class="startup-card" aria-live="polite">
+        <p class="eyebrow">Desktop Setup</p>
+        <h1 id="startup-title">正在检查桌面环境</h1>
+        <p id="startup-description" class="startup-description">
+          gogo-app 正在确认本地知识库工作台所需的运行环境，请稍候。
+        </p>
+        <dl id="startup-status-list" class="startup-status-list"></dl>
+        <p id="startup-feedback" class="settings-feedback hidden" aria-live="polite"></p>
+        <div class="startup-actions">
+          <button id="startup-install-pi-button" class="button button-primary" type="button">
+            安装 Pi
+          </button>
+          <button id="startup-retry-button" class="button button-secondary hidden" type="button">
+            重新检查
+          </button>
+          <button id="startup-continue-button" class="button button-secondary" type="button">
+            先浏览 Wiki
+          </button>
+        </div>
+        <p class="startup-help">
+          缺少 <code>pi</code> 时，聊天、ingest 和写回链路无法完整使用；不过你仍然可以先进入工作台浏览 Wiki。
+        </p>
+      </section>
+    </div>
     <div class="site-shell app-shell">
 	      <header class="topbar">
 	        <div class="app-title-row">
@@ -503,6 +528,7 @@
 		                        OAuth 登录会打开终端中的 Pi agent。打开后请在终端里手动输入 <code>/login</code>，再由你自己选择支持的模型提供商并完成登录。
 		                      </p>
 		                      <div class="settings-actions">
+		                        <button id="provider-install-pi-button" class="button button-secondary hidden" type="button">安装 Pi</button>
 		                        <button id="provider-desktop-login-button" class="button button-secondary" type="button">打开终端 Pi 登录</button>
 		                      </div>
 		                    </div>
@@ -524,6 +550,7 @@
 		                    </p>
 		                  </div>
 		                  <div class="settings-actions">
+		                    <button id="install-pi-button" class="button button-secondary hidden" type="button">安装 Pi</button>
 		                    <button id="refresh-diagnostics-button" class="button button-primary" type="button">刷新状态</button>
 		                  </div>
 		                  <p id="diagnostics-feedback" class="settings-feedback hidden" aria-live="polite"></p>
@@ -555,8 +582,8 @@
 	      <div id="settings-toast-viewport" class="settings-toast-viewport" aria-live="polite" aria-atomic="true"></div>
 	    </div>
 
-	    <script src="/assets/desktop-bridge.js?v=20260416-01"></script>
-	    <script src="/assets/workbench.js?v=20260416-01"></script>
+	    <script src="/assets/desktop-bridge.js?v=20260417-01"></script>
+	    <script src="/assets/workbench.js?v=20260417-01"></script>
 	    <script src="/assets/wiki.js?v=20260415-12"></script>
 	    <script src="/assets/chat.js?v=20260415-12"></script>
   </body>

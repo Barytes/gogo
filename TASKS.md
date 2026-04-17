@@ -4,7 +4,7 @@
 > 项目级架构参考：[gogo-project-architecture.md](docs/gogo-project-architecture.md)  
 > 应用架构参考：[gogo-app-architecture.md](docs/gogo-app-architecture.md)
 
-**最后更新**: 2026-04-16
+**最后更新**: 2026-04-17
 
 ## 相关任务文档
 
@@ -306,28 +306,43 @@
 
 #### 4.1 Phase 1: Companion Knowledge-Base 与 Demo 体验
 
-- [ ] 打造一套开箱即用的 companion knowledge-base
-  - [ ] 设计一份适合公开演示的示例 knowledge-base，确保目录结构、内容质量和任务覆盖足以支撑首次体验
-  - [ ] 更新知识库中的 `AGENTS.md`、`COMMUNICATION.md`、schemas 与相关提示词，让默认行为更稳定、更符合对外展示目标
-  - [ ] 准备一组高质量示例页面、原始资料和可重复演示的研究任务，确保“安装后进入示例库”不是空壳体验
+- [x] 打造一套开箱即用的 companion knowledge-base
+  - [x] 收敛为最小通用结构：`inbox / raw / wiki / AGENTS.md / schemas(query, ingest, lint) / skills(示例)`，不再沿用课题组专用的复杂分层
+  - [x] 更新知识库中的 `AGENTS.md`、基础 `schemas` 与示例 `skills`，只保留最基本的行为指示，不再要求额外的研究组运营规则
   - [x] 明确写回最小语义在 companion knowledge-base 中如何体现：允许 agent 将用户要求或自己判断高价值的内容写回 Wiki
   - [x] 明确 companion knowledge-base 与用户自有知识库的边界：companion knowledge-base 用于开箱演示与随时切回的示例体验，用户也可自由切换到自己的长期知识库
 
 #### 4.2 Phase 2: 安装器、Runtime 与资源交付
 
 - [ ] 完成 Windows / macOS 安装包链路
-  - [ ] 启用并稳定 Tauri 正式 bundle，产出面向普通用户的 Windows / macOS 安装介质
-  - [ ] 完成 Python 后端运行时交付，确保安装包产物不再依赖源码目录、开发态 `.venv` 或手工运行命令
-  - [ ] 实现 companion knowledge-base 随安装包交付，并在安装过程中允许用户决定其路径
+  - [x] 启用并稳定 Tauri 正式 bundle，并验证发布态资源映射可稳定产出 macOS 调试构建的 `.app + .dmg` 产物；Windows 安装介质仍待补齐
+  - [x] 将当前 `desktop:build` 从 Unix shell 主链重构为真正跨平台可运行的构建入口：现已改为 Node 脚本，避免 Windows 打包依赖 `sh`、`rm`、`mv`、`find`
+  - [x] 补齐 Windows 构建适配的代码侧主链：当前 `desktop:build` 已可在代码层构建独立后端 runtime、staging bundled `pi` 并继续调用 Tauri bundle；实机/CI 验证仍留给下一条任务
+  - [ ] 在 Windows 本机或 Windows CI runner 上验证 `npm run desktop:build`，确认可产出 `backend-runtime/gogo-backend.exe` 与最终安装介质（至少 `msi`）
+  - [x] 明确 Windows 首发安装介质策略：首发先收敛为 `msi`，NSIS `-setup.exe` 暂不作为首发必做项
+  - [x] 完成桌面后端运行时交付：`desktop:build` 会先构建独立的 PyInstaller 后端 runtime，并验证其可脱离源码目录与开发态 `.venv` 启动；发布态优先启动 bundle 内的 `backend-runtime`
+  - [x] 实现 companion knowledge-base 随安装包资源交付，并在桌面发布态下默认从 bundle template provision 到可写的 app data 目录
+  - [x] 让用户在安装/首次启动时决定 companion knowledge-base 路径，而不是只使用默认 provision 路径；当前实现为：首次启动时弹出系统目录选择器，记住选择结果，并把 companion knowledge-base provision 到用户选定位置
   - [ ] 实现安装器中的 `pi` 检测与静默安装链路
-  - [ ] 确保安装后的应用能够正确定位 companion knowledge-base、用户切换的外部知识库、后端资源与日志目录
-  - [ ] 落实 API key 的本地安全存储方案
+  - [x] 调整 `pi` 交付优先级：优先评估并接入 bundled `pi`，把“启动时 fallback 安装”保留为兜底路径，而不是正式首选交付方式
+  - [x] 先把 bundled `pi` 的打包入口接进构建链：`desktop:build` 现在支持通过 `GOGO_DESKTOP_PI_BINARY` 把上游 `pi` 运行目录收进 bundle resources，运行时会优先使用它
+  - [x] 已在 macOS 本地验证 bundled `pi` 运行目录可随桌面 bundle 分发：`pi-runtime/` 会带上 `package.json` 等旁件，OAuth `/login` 的终端拉起不再因缺少运行时文件而失败，诊断接口也已确认运行时优先使用 bundle 内的 `pi`
+  - [x] 已补齐 Windows 侧桌面 Pi 登录桥代码：桌面版现在会在 Windows 上通过 `cmd.exe` 拉起 bundled / system `pi`，并提示用户在终端中手动输入 `/login`；仍待 Windows 实机验收
+  - [x] 在当前桌面运行时保留 `pi` 检测与启动前安装链路作为 fallback：当未检测到 bundled/system `pi` 时，应用启动时优先展示安装引导，并在后台把 `pi` 托管到 app data 下的 `pi-runtime/`
+  - [x] 将 `pi` 安装状态接入设置与诊断：展示命令来源、托管路径、npm 可用性、安装中状态与本地安装日志路径
+  - [ ] 为 Windows 准备并验收可随包分发的 bundled `pi` 运行目录，确认 `pi.exe` 及其同目录运行时文件都能随包工作，而不是只复制单个可执行文件
+  - [ ] 为 Windows / macOS 分别准备并验收可随包分发的 `pi` 运行目录产物，确认 OAuth `/login`、RPC 与 extension 链路在 bundled 形态下正常；当前 macOS 本地 bundle 已验证，Windows 与跨平台最终验收仍待完成
+  - [ ] macOS bundled `pi` 不可直接裸分发：需要作为 `gogo-app.app` 的内嵌运行时一起签名，并纳入整包 notarization 验收
+  - [ ] 把当前启动前安装链路继续前移到真正的安装器/首次启动向导，做到 bundled `pi` 缺失时普通用户也无需等待应用启动后再补装
+  - [x] 确保发布态应用能够正确定位 bundle 内的后端资源，并把默认 knowledge-base、session 与 Pi extension 等可写状态收口到 app data 目录
+  - [x] 收敛桌面资源 staging 目录：当前构建链与 `.gitignore` 已统一以 `src-tauri/desktop-runtime-staging/` 作为唯一有效资源输入，旧 `desktop-runtime/` 只保留为历史遗留目录
   - [ ] 明确并接入 Windows 代码签名
   - [ ] 明确并接入 macOS Developer ID 签名与 notarization
 
 #### 4.3 Phase 3: 首次启动引导、模型配置与本地诊断
 
 - [ ] 补齐首次启动引导与安装后诊断
+  - [ ] 发布时序说明：4.3 不阻塞“内部打包验证”，但应阻塞“面向普通用户的候选发布包”
   - [ ] 实现首次启动向导，按既定主路径串起 `pi` 安装/检测、模型配置、进入 companion knowledge-base 和 demo 触发
   - [ ] 把“API key 可跳过，但仍可浏览 Wiki”做成清晰分支，而不是报错中断
   - [ ] 实现模型配置入口，覆盖 API key 型 provider 与首发承诺范围内的 Pi OAuth
