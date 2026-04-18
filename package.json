@@ -9,7 +9,9 @@
     "desktop:build": "node ./scripts/desktop-build.mjs"
   },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "latest"
+    "@mariozechner/pi-coding-agent": "latest",
+    "katex": "^0.16.45",
+    "marked": "^18.0.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

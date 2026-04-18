@@ -20,6 +20,16 @@ const uvCacheDir = path.resolve(process.env.GOGO_DESKTOP_UV_CACHE_DIR || path.jo
 const pyinstallerConfigDir = path.resolve(
   process.env.GOGO_DESKTOP_PYINSTALLER_CONFIG_DIR || path.join(appRoot, ".cache", "pyinstaller"),
 );
+const PI_RUNTIME_INCLUDE = new Set([
+  "pi",
+  "pi.exe",
+  "pi.cmd",
+  "package.json",
+  "theme",
+  "assets",
+  "export-html",
+  "photon_rs_bg.wasm",
+]);
 
 function log(message) {
   console.log(`[gogo-desktop-build] ${message}`);
@@ -174,7 +184,7 @@ async function stageBundledPiRuntime() {
   }
 
   for (const entry of await fs.readdir(sourceDir)) {
-    if (entry === ".DS_Store") {
+    if (entry === ".DS_Store" || !PI_RUNTIME_INCLUDE.has(entry)) {
       continue;
     }
     await fs.cp(path.join(sourceDir, entry), path.join(piDistDir, entry), {

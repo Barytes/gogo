@@ -501,6 +501,7 @@ function renderPageData(data) {
 
   if (activeRenderMode === "markdown") {
     contentEl.innerHTML = markdownToHtml(data.content || "");
+    window.GogoMath?.renderElement?.(contentEl);
     contentEl.querySelectorAll("a").forEach((a) => {
       const href = a.getAttribute("href") || "";
       const destination = resolveWorkbenchTarget(href, data.path, activeMode);

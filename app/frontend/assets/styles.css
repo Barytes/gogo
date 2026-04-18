@@ -1718,6 +1718,18 @@ body.layout-chat .unified-chat-panel {
   white-space: pre;
 }
 
+.message-body .katex-display,
+.wiki-content .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
+.message-body .katex-display > .katex,
+.wiki-content .katex-display > .katex {
+  white-space: nowrap;
+}
+
 .message-body code {
   word-break: break-word;
 }

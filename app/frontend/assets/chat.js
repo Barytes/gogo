@@ -2552,6 +2552,7 @@ function renderMessageBody(container, role, content) {
   }
   if (role === "assistant") {
     container.innerHTML = markdownToHtml(content || "");
+    window.GogoMath?.renderElement?.(container);
     return;
   }
   container.textContent = content || "";
