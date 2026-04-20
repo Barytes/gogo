@@ -4,7 +4,7 @@
 > 项目级架构参考：[gogo-project-architecture.md](docs/gogo-project-architecture.md)  
 > 应用架构参考：[gogo-app-architecture.md](docs/gogo-app-architecture.md)
 
-**最后更新**: 2026-04-18
+**最后更新**: 2026-04-19
 
 ## 相关任务文档
 
@@ -293,8 +293,8 @@
 - [x] 首发平台：Windows + macOS 必须同时支持；Linux 仅保留开发态
 - [x] 正式产品形态：只认桌面版；Web 版不作为正式对外产品
 - [x] companion knowledge-base：随安装包提供，安装时由用户决定路径，安装后保留为可随时切回的示例库
-- [x] `pi` 依赖策略：安装器检测并静默安装 `pi`
-- [x] 首次启动主路径：检测/安装 `pi` -> 配置模型/API key（可跳过） -> 进入 companion knowledge-base -> 已配置模型时跑 demo，未配置时可先浏览 Wiki
+- [x] `pi` 依赖策略：首发优先使用 bundled `pi` 运行时；未检测到 bundled / system `pi` 时，再走应用内托管安装作为 fallback
+- [x] 首次启动主路径：优先检测 bundled / system `pi`，必要时引导安装 -> 配置模型/API key（可跳过） -> 进入 companion knowledge-base -> 已配置模型时跑 demo，未配置时可先浏览 Wiki
 - [x] 首发模型配置范围：支持 API key 型 provider，以及 `pi` 已稳定支持且桌面引导已验证通过的 OAuth
 - [x] API key 存储策略：首发阶段仅保存在本机认证文件中，不自动上传，暂不接入 macOS Keychain / Windows Credential Manager
 - [x] 首发最低成功标准：用户配置模型后，能完整跑通一次上传、ingest、聊天、写回
@@ -315,7 +315,7 @@
 #### 4.2 Phase 2: 安装器、Runtime 与资源交付
 
 - [ ] 完成 Windows / macOS 安装包链路
-  - [x] 启用并稳定 Tauri 正式 bundle，并验证发布态资源映射可稳定产出 macOS 调试构建的 `.app + .dmg` 产物；Windows 安装介质仍待补齐
+  - [x] 启用并稳定 Tauri 正式 bundle，并验证发布态资源映射可稳定产出 macOS release `.app + .dmg` 产物；Windows 安装介质仍待补齐
   - [x] 将当前 `desktop:build` 从 Unix shell 主链重构为真正跨平台可运行的构建入口：现已改为 Node 脚本，避免 Windows 打包依赖 `sh`、`rm`、`mv`、`find`
   - [x] 补齐 Windows 构建适配的代码侧主链：当前 `desktop:build` 已可在代码层构建独立后端 runtime、staging bundled `pi` 并继续调用 Tauri bundle；实机/CI 验证仍留给下一条任务
   - [ ] 在 Windows 本机或 Windows CI runner 上验证 `npm run desktop:build`，确认可产出 `backend-runtime/gogo-backend.exe` 与最终安装介质（至少 `msi`）
@@ -325,7 +325,7 @@
   - [x] 让用户在安装/首次启动时决定 companion knowledge-base 路径，而不是只使用默认 provision 路径；当前实现为：首次启动时弹出系统目录选择器，记住选择结果，并把 companion knowledge-base provision 到用户选定位置
   - [ ] 实现安装器中的 `pi` 检测与静默安装链路
   - [x] 调整 `pi` 交付优先级：优先评估并接入 bundled `pi`，把“启动时 fallback 安装”保留为兜底路径，而不是正式首选交付方式
-  - [x] 先把 bundled `pi` 的打包入口接进构建链：`desktop:build` 现在支持通过 `GOGO_DESKTOP_PI_BINARY` 把上游 `pi` 运行目录收进 bundle resources，运行时会优先使用它
+  - [x] 先把 bundled `pi` 的打包入口接进构建链：`desktop:build` 现在会优先使用当前平台默认的 bundled `pi` 路径，也支持通过 `GOGO_DESKTOP_PI_BINARY` 显式指定上游 `pi` 运行目录；若两者都不可用则直接 fail，避免产出未携带 `pi-runtime` 的安装包
   - [x] 已在 macOS 本地验证 bundled `pi` 运行目录可随桌面 bundle 分发：`pi-runtime/` 会带上 `package.json` 等旁件，OAuth `/login` 的终端拉起不再因缺少运行时文件而失败，诊断接口也已确认运行时优先使用 bundle 内的 `pi`
   - [x] 已补齐 Windows 侧桌面 Pi 登录桥代码：桌面版现在会在 Windows 上通过 `cmd.exe` 拉起 bundled / system `pi`，并提示用户在终端中手动输入 `/login`；仍待 Windows 实机验收
   - [x] 在当前桌面运行时保留 `pi` 检测与启动前安装链路作为 fallback：当未检测到 bundled/system `pi` 时，应用启动时优先展示安装引导，并在后台把 `pi` 托管到 app data 下的 `pi-runtime/`
@@ -352,13 +352,13 @@
 
 #### 4.4 Phase 4: 首发能力闭环
 
-- [ ] 围绕首发最低成功标准打通完整任务链
-  - [ ] 上传文件
-  - [ ] ingest
-  - [ ] 聊天
-  - [ ] 写回 Wiki
-  - [ ] 验证 companion knowledge-base 和用户自有 knowledge-base 两条路径都可跑通
-  - [ ] 验证“已配置模型”和“未配置模型但先浏览 Wiki”两种首屏路径都成立
+- [x] 围绕首发最低成功标准打通完整任务链
+  - [x] 上传文件
+  - [x] ingest
+  - [x] 聊天
+  - [x] 写回 Wiki
+  - [x] 验证 companion knowledge-base 和用户自有 knowledge-base 两条路径都可跑通
+  - [x] 验证“已配置模型”和“未配置模型但先浏览 Wiki”两种首屏路径都成立
   - [x] 补齐首发前的最小安全约束，降低 `pi` 直接执行 bash / 写文件时的宿主机风险
     - [x] 设计并落地用户可见的安全模式总开关：
       - [x] `只读模式`：允许聊天、读文件、搜索，禁止 `write` / `edit` / `bash`
@@ -384,11 +384,7 @@
       - [x] 明确当前不是强沙箱，不承诺容器级隔离
       - [x] 明确当前默认限制与用户可调整项
       - [x] 把“容器化执行 / 更强沙箱”列为后续增强项，而不是首发阻塞项
-    - 结论：当前版本已经具备首发可用的“最小安全约束”闭环。Pi RPC 进程会自动加载 gogo-app 托管的 `managed-security.ts`；默认安全模式为“允许写文件”，允许在当前 knowledge-base 内执行 `write/edit`，默认禁止 `bash`，并持续阻断 `sudo`、删根目录、磁盘格式化等明显危险命令。所有 `bash/write/edit` 的 allow/block 决策都会写入本地安全日志，并在 diagnostics 中展示当前模式、受信任工作区、日志路径与最近审计记录。
-    - 后续增强（不再阻塞首发）
-      - [ ] 为“可能危险但用户可能确实要做”的操作建立二次确认
-      - [ ] 接入 `pi` 的 RPC extension UI confirm 子协议
-      - [ ] 评估容器化执行 / 更强沙箱
+    - 结论：当前版本已经具备首发可用的“最小安全约束”闭环。Pi RPC 进程会自动加载 gogo-app 托管的 `managed-security.ts`；默认安全模式为“允许写文件”，允许在当前 knowledge-base 内执行 `write/edit`，默认禁止 `bash`，并持续阻断 `sudo`、删根目录、磁盘格式化等明显危险命令。所有 `bash/write/edit` 的 allow/block 决策都会写入本地安全日志，并在聊天工作台中提供内联审批浮层，支持对当前工具调用直接批准或禁止，并把禁止理由继续 steer 给 Pi；当前模式、受信任工作区、日志路径与最近审计记录也可在应用内查看。
 
 #### 4.5 Phase 5: 跨平台兼容与干净机器验收
 
