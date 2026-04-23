@@ -98,6 +98,14 @@ const THINKING_LEVEL_LABELS = {
   high: "高思考",
   xhigh: "超高思考",
 };
+const THINKING_LEVEL_DESCRIPTIONS = {
+  off: "直接回答，适合简单查询和快速确认。",
+  minimal: "保留极少思考，优先降低延迟。",
+  low: "做轻量推理，适合多数日常问题。",
+  medium: "兼顾速度和推理深度，适合作为默认值。",
+  high: "做更充分的推理，适合复杂任务。",
+  xhigh: "最大化推理深度，适合最难的问题。",
+};
 const SECURITY_MODE_SHORT_LABELS = {
   readonly: "只读",
   "workspace-write": "写文件",
@@ -343,6 +351,44 @@ function formatTokenCount(value) {
     return "—";
   }
   return Math.round(number).toLocaleString("en-US");
+}
+
+function createMenuItemText(labelText, detailText = "") {
+  const fragment = document.createDocumentFragment();
+
+  const label = document.createElement("span");
+  label.className = "chat-control-menu-item-label";
+  label.textContent = String(labelText || "").trim();
+  fragment.appendChild(label);
+
+  const detail = String(detailText || "").trim();
+  if (detail) {
+    const detailEl = document.createElement("span");
+    detailEl.className = "chat-control-menu-item-detail";
+    detailEl.textContent = detail;
+    fragment.appendChild(detailEl);
+  }
+
+  return fragment;
+}
+
+function modelMenuDetail(model) {
+  if (!model || typeof model !== "object") {
+    return "";
+  }
+  const provider = String(model.provider || "").trim();
+  const modelId = String(model.model_id || "").trim();
+  const contextWindow = Number(model.raw?.contextWindow);
+  const parts = [];
+  if (provider && modelId) {
+    parts.push(`${provider}/${modelId}`);
+  } else if (modelId) {
+    parts.push(modelId);
+  }
+  if (Number.isFinite(contextWindow) && contextWindow > 0) {
+    parts.push(`${formatTokenCount(contextWindow)} tokens`);
+  }
+  return parts.join(" · ");
 }
 
 function formatContextPercent(value) {
@@ -998,6 +1044,13 @@ function closeInboxPanel() {
   renderInboxPanel();
 }
 
+function shouldIgnoreInboxOutsideDismiss(target) {
+  return Boolean(
+    target.closest("#inbox-panel") ||
+      target.closest("#toggle-inbox-panel")
+  );
+}
+
 async function fetchInboxFiles() {
   const response = await fetch("/api/knowledge-base/inbox/files");
   if (!response.ok) {
@@ -1175,7 +1228,7 @@ function renderChatControlMenus() {
       if (model.provider === current.model_provider && model.model_id === current.model_id) {
         item.classList.add("active");
       }
-      item.textContent = model.label;
+      item.appendChild(createMenuItemText(model.label, modelMenuDetail(model)));
       item.dataset.provider = model.provider;
       item.dataset.modelId = model.model_id;
       item.addEventListener("click", async () => {
@@ -1198,7 +1251,12 @@ function renderChatControlMenus() {
       if (!isThinkingLevelSupported(level)) {
         item.classList.add("unsupported");
       }
-      item.textContent = THINKING_LEVEL_LABELS[level] || level;
+      const levelLabel = THINKING_LEVEL_LABELS[level] || level;
+      const detailParts = [THINKING_LEVEL_DESCRIPTIONS[level] || ""];
+      if (!isThinkingLevelSupported(level)) {
+        detailParts.push("当前模型暂不支持。");
+      }
+      item.appendChild(createMenuItemText(levelLabel, detailParts.filter(Boolean).join(" ")));
       item.dataset.level = level;
       item.addEventListener("click", async () => {
         closeChatControlMenus();
@@ -1222,18 +1280,7 @@ function renderChatControlMenus() {
       if (mode.id === securitySettingsState.mode) {
         item.classList.add("active");
       }
-
-      const label = document.createElement("span");
-      label.className = "chat-control-menu-item-label";
-      label.textContent = mode.label;
-      item.appendChild(label);
-
-      if (mode.description) {
-        const detail = document.createElement("span");
-        detail.className = "chat-control-menu-item-detail";
-        detail.textContent = mode.description;
-        item.appendChild(detail);
-      }
+      item.appendChild(createMenuItemText(mode.label, mode.description));
 
       item.addEventListener("click", async () => {
         closeChatControlMenus();
@@ -2627,6 +2674,10 @@ async function abortCurrentReply() {
 window.ChatWorkbench = {
   focusInput: focusChatInput,
   injectPrompt,
+  openInbox: async (highlightPath = "") => {
+    openInboxPanel();
+    await refreshInboxFiles({ open: true, highlightPath });
+  },
   reloadPiOptions,
   reloadSecuritySettings,
   reloadSlashCommands: async () => {
@@ -4148,6 +4199,9 @@ document.addEventListener("click", (event) => {
   const target = event.target;
   if (!(target instanceof Element)) {
     return;
+  }
+  if (inboxPanelOpen && !shouldIgnoreInboxOutsideDismiss(target)) {
+    closeInboxPanel();
   }
   if (!target.closest(".chat-control-menu-shell")) {
     closeChatControlMenus();
