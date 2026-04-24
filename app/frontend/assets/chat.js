@@ -3016,6 +3016,43 @@ function formatTraceSummary(traceCount = 0, warningCount = 0) {
   return parts.join(" · ") || "思考过程";
 }
 
+function installLazyDetailsRenderer(detailsEl, summaryEl, renderWhenOpen) {
+  if (!(detailsEl instanceof HTMLDetailsElement) || typeof renderWhenOpen !== "function") {
+    return;
+  }
+
+  let scheduled = false;
+
+  function ensureRendered() {
+    if (!detailsEl.open) {
+      return;
+    }
+    renderWhenOpen();
+  }
+
+  function scheduleEnsureRendered() {
+    if (scheduled) {
+      return;
+    }
+    scheduled = true;
+    window.requestAnimationFrame(() => {
+      scheduled = false;
+      ensureRendered();
+    });
+  }
+
+  detailsEl.addEventListener("toggle", ensureRendered);
+
+  if (summaryEl instanceof HTMLElement) {
+    summaryEl.addEventListener("click", scheduleEnsureRendered);
+    summaryEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+        scheduleEnsureRendered();
+      }
+    });
+  }
+}
+
 function buildHistoryTraceContent(trace = [], warnings = []) {
   const fragment = document.createDocumentFragment();
 
@@ -3136,12 +3173,16 @@ function renderTrace(wrapper, trace = [], warnings = []) {
   );
   details.appendChild(summary);
 
+  const traceBodyHostEl = document.createElement("div");
+  details.appendChild(traceBodyHostEl);
+
   let hasRenderedContent = false;
-  details.addEventListener("toggle", () => {
-    if (!details.open || hasRenderedContent) {
+
+  installLazyDetailsRenderer(details, summary, () => {
+    if (hasRenderedContent) {
       return;
     }
-    details.appendChild(buildHistoryTraceContent(trace, warnings));
+    traceBodyHostEl.appendChild(buildHistoryTraceContent(trace, warnings));
     hasRenderedContent = true;
   });
 
@@ -3305,8 +3346,8 @@ function createStreamingAssistantMessage(initialText, options = {}) {
     });
   }
 
-  detailsEl.addEventListener("toggle", () => {
-    if (!detailsEl.open || !traceBodyDirty) {
+  installLazyDetailsRenderer(detailsEl, summaryEl, () => {
+    if (!traceBodyDirty) {
       return;
     }
     scheduleTraceBodyRender({ immediate: true });

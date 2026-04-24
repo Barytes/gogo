@@ -317,9 +317,12 @@ class SessionPool:
             handle.seek(0, 2)
             position = handle.tell()
             buffer = b""
-            lines: list[bytes] = []
+            tail_lines: list[bytes] = []
 
-            while position > 0 and len(lines) < max_lines:
+            # Read backwards in chunks and keep complete lines from the tail.
+            # Some turn entries can be very large JSONL rows (full trace / diff),
+            # so a single line may span multiple chunks.
+            while position > 0 and len(tail_lines) < max_lines:
                 read_size = min(APP_TURNS_TAIL_READ_CHUNK_SIZE, position)
                 position -= read_size
                 handle.seek(position)
@@ -329,17 +332,25 @@ class SessionPool:
                 buffer = chunk + buffer
                 parts = buffer.splitlines()
                 if position > 0:
-                    buffer = parts[0] if parts else buffer
-                    lines = parts[1:]
+                    if not parts:
+                        continue
+                    buffer = parts[0]
+                    complete_lines = parts[1:]
                 else:
                     buffer = b""
-                    lines = parts
+                    complete_lines = parts
 
-            tail_lines = lines[-max_lines:]
+                for line in reversed(complete_lines):
+                    stripped = line.strip()
+                    if not stripped:
+                        continue
+                    tail_lines.append(stripped)
+                    if len(tail_lines) >= max_lines:
+                        break
+
             return [
                 line.decode("utf-8", errors="ignore").strip()
-                for line in tail_lines
-                if line.strip()
+                for line in reversed(tail_lines)
             ]
 
     def _load_history_from_app_turns(
