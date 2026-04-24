@@ -2,12 +2,20 @@
 .DS_Store
 .idea/
 .vscode/
+.vs/
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.stackdump
 
 # Local environment
 .env
 .env.local
 .env.*.local
 .python-version
+.local/
 .venv/
 venv/
 
@@ -31,9 +39,11 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+pip-wheel-metadata/
 
 # App runtime state
 .gogo/
+pi-runtime/
 
 # Desktop build artifacts
 .cache/
