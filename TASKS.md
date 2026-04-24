@@ -343,6 +343,7 @@
   - [x] 更新知识库中的 `AGENTS.md`、基础 `schemas` 与示例 `skills`，只保留最基本的行为指示，不再要求额外的研究组运营规则
   - [x] 明确写回最小语义在 companion knowledge-base 中如何体现：允许 agent 将用户要求或自己判断高价值的内容写回 Wiki
   - [x] 明确 companion knowledge-base 与用户自有知识库的边界：companion knowledge-base 用于开箱演示与随时切回的示例体验，用户也可自由切换到自己的长期知识库
+  - [x] 将 companion knowledge-base 的仓库内默认路径收敛为 `./example-knowledge-base`；桌面打包仍把它放入 bundle 内的稳定资源目录 `knowledge-base/`，避免影响发布态 provision 逻辑
 
 #### 4.2 Phase 2: 安装器、Runtime 与资源交付
 
@@ -505,6 +506,7 @@
 
 | 日期 | 变更 |
 |------|------|
+| 2026-04-24 | 将内置示例知识库源目录从仓库外 `../knowledge-base` 收敛为仓库内 `./example-knowledge-base`：`desktop:build` 默认从该目录收集 companion knowledge-base 资源，并支持 `GOGO_DESKTOP_KNOWLEDGE_BASE_DIR` 临时覆盖；bundle 内资源名继续保持 `knowledge-base/`，避免影响安装包运行时 provision |
 | 2026-04-24 | 修复 Windows 10/11 启动时多出终端窗口且关终端会关闭桌面端的问题：release 版 Tauri 主程序现在使用 Windows GUI subsystem；同时后端日志打开失败不再导致 setup panic，`backend.log` 不可写时会降级为 null stdout/stderr |
 | 2026-04-24 | 修复 Windows 11 OAuth 登录终端报错 `0x80070002`：另一台设备上 Windows Terminal 会把 `& 'C:\Program Files\gogo-app\pi-runtime\pi.exe'` 这段 PowerShell 命令体误当成要启动的程序，导致“系统找不到指定的文件”。当前 Rust 桌面桥与 Python 兜底均改为直接启动 PowerShell，`cmd.exe` 只作最终兜底 |
 | 2026-04-24 | 修复 Windows 安装版首次启动后再次打开闪退：`%TEMP%\gogo-app-desktop-startup.log` 显示第二次启动在复制 `backend-runtime/_internal/httptools/parser/*.pyd` 到 app data 时失败并触发 setup panic；当前桌面启动器会先检查 app data 下已物化的 `bundled-resources/backend-runtime` 是否完整，完整则直接复用，只有半成品目录才清理后重建，避免关闭欢迎页后再次打开只闪黑框 |

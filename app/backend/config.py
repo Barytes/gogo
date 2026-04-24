@@ -22,7 +22,11 @@ _DEFAULT_KNOWLEDGE_BASE_DIR_ENV = os.getenv("GOGO_DEFAULT_KNOWLEDGE_BASE_DIR")
 DEFAULT_KNOWLEDGE_BASE_DIR = (
     Path(_DEFAULT_KNOWLEDGE_BASE_DIR_ENV).expanduser().resolve()
     if _DEFAULT_KNOWLEDGE_BASE_DIR_ENV
-    else (APP_ROOT.parent / "knowledge-base").resolve()
+    else (
+        APP_ROOT / "example-knowledge-base"
+        if (APP_ROOT / "example-knowledge-base").exists()
+        else APP_ROOT.parent / "knowledge-base"
+    ).resolve()
 )
 _COMPANION_KNOWLEDGE_BASE_TEMPLATE_DIR_ENV = os.getenv("GOGO_COMPANION_KNOWLEDGE_BASE_TEMPLATE_DIR")
 COMPANION_KNOWLEDGE_BASE_TEMPLATE_DIR = (

@@ -1,0 +1,4 @@
+interface:
+  display_name: "KB Query"
+  short_description: "Answer from local knowledge and insight pages."
+  default_prompt: "Use $kb-query to answer from this repository only, beginning with the local pages you actually consulted."

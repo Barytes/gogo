@@ -1,0 +1,4 @@
+interface:
+  display_name: "Insight Write"
+  short_description: "Save durable research judgments."
+  default_prompt: "Use $insight-write to turn this high-value result into a maintained insight page with evidence, judgment, limits, and next implications."

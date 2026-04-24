@@ -72,7 +72,9 @@ const bundleRoot = path.join(appRoot, "src-tauri", "target", "release", "bundle"
 const macosBundleDir = path.join(bundleRoot, "macos");
 const dmgBundleDir = path.join(bundleRoot, "dmg");
 const appSourceDir = path.join(appRoot, "app");
-const knowledgeBaseSourceDir = path.resolve(appRoot, "..", "knowledge-base");
+const knowledgeBaseSourceDir = resolveAppRelativePath(
+  process.env.GOGO_DESKTOP_KNOWLEDGE_BASE_DIR || "example-knowledge-base",
+);
 const bundledPiRuntimeRoots = uniqueNonEmptyPaths([
   resolveAppRelativePath(process.env.GOGO_DESKTOP_PI_RUNTIME_ROOT || ""),
   path.join(appRoot, "pi-runtime"),
@@ -95,6 +97,13 @@ const PI_RUNTIME_INCLUDE = new Set([
   "assets",
   "export-html",
   "photon_rs_bg.wasm",
+]);
+const RESOURCE_DIR_EXCLUDE = new Set([
+  ".git",
+  ".github",
+  ".gogo",
+  "__pycache__",
+  "node_modules",
 ]);
 
 function log(message) {
@@ -198,6 +207,9 @@ async function listFilesRecursive(directory) {
     if (entry.name === ".DS_Store" || entry.name === ".gitkeep") {
       continue;
     }
+    if (entry.isDirectory() && RESOURCE_DIR_EXCLUDE.has(entry.name)) {
+      continue;
+    }
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       files.push(...await listFilesRecursive(entryPath));
@@ -234,7 +246,7 @@ async function addFileResource(resourceMap, sourceFile, targetFile) {
 
 async function buildBundleResources() {
   const resourceMap = {};
-  const knowledgeBaseRoot = path.resolve(appRoot, "..", "knowledge-base");
+  const knowledgeBaseRoot = knowledgeBaseSourceDir;
 
   await addDirectoryResources(resourceMap, path.join(appRoot, "app"), "app");
   await addDirectoryResources(resourceMap, backendDistDir, "backend-runtime");

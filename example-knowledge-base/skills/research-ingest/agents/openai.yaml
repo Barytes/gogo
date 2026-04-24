@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research Ingest"
+  short_description: "Compile sources into knowledge pages."
+  default_prompt: "Use $research-ingest to compile this source material into the knowledge layer, update related pages, and record the work in the log."
