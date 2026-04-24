@@ -32,13 +32,13 @@
   1. 检测并安装 `pi`
   2. 配置模型/API key（允许跳过）
   3. 进入 companion knowledge-base
-  4. 若已完成模型配置，则可以直接跑 demo；若未配置，则至少可以浏览 Wiki
+  4. 若已完成模型配置，则可以继续上传 / ingest / 聊天 / 写回；若未配置，则至少可以浏览 Wiki
 - companion knowledge-base 会随安装包提供，并在安装/首次启动过程中让用户决定其安装路径
 - 用户后续可以切换到自己的 knowledge-base，同时 companion knowledge-base 仍保留为可随时切回的示例库
 - 首发模型配置支持：
   - API key 型 provider
   - `pi` 已稳定支持且桌面引导已验证通过的 OAuth provider
-- API key 目标存储策略是**本地安全存储**
+- API key 首发策略是**仅保存在本机认证文件中，不自动上传，暂不接入 macOS Keychain / Windows Credential Manager**
 - 首发最低成功标准是：用户完成模型配置后，能够跑通一次**上传 -> ingest -> 聊天 -> 写回**
 - 首发必须支持**中文路径**与**带空格路径**
 - 知识库浏览与编辑可以断网；聊天链路依赖用户自己配置并联网访问的模型
@@ -101,7 +101,7 @@
 - 用户无需克隆源码仓库
 - 用户无需安装 Node、Rust、或手动运行 `uvicorn`
 - 用户通过标准安装介质完成安装
-  - Windows：首发先提供 `msi`
+  - Windows：首发先提供 `NSIS setup.exe`
   - macOS：如 `.app + dmg`
 - 应用启动后能够以面向用户的方式完成：
   - 静默检测并安装 `pi`
@@ -121,7 +121,7 @@
 |---|---|---|---|
 | Web 版（源码启动） | 已支持，但不是正式对外产品形态 | 开发者 / 技术用户 | Python 环境、`uv` 或可用 `python + uvicorn`、本地 knowledge-base |
 | Tauri 桌面开发版（源码启动） | 已支持，但属于开发态 | 开发者 / 内测用户 | Node `22/24`、Rust、Python 环境、本地 knowledge-base；若未提供 bundled / system `pi`，fallback 安装链路仍需要 `npm` |
-| Windows 最终用户安装包 | 目标明确，但未完成 | 普通最终用户 | 首发安装介质策略已收敛为 `msi`，但当前仍不应承诺可直接使用 |
+| Windows 最终用户安装包 | 目标明确，但未完成 | 普通最终用户 | 首发安装介质策略已收敛为 `NSIS setup.exe`，但当前仍不应承诺可直接使用 |
 | macOS 最终用户安装包 | 目标明确，但未完成 | 普通最终用户 | 当前仍不应承诺可直接使用 |
 
 当前建议的对外口径是：
@@ -185,7 +185,7 @@
 
 - companion knowledge-base 的安装路径由谁决定
 - `pi` 的静默安装与升级链路如何随安装器交付
-- API key 的本地安全存储方案如何落地到不同平台
+- API key 是否以及何时升级到 macOS Keychain / Windows Credential Manager
 
 ## 5. 当前已知限制
 
@@ -202,6 +202,7 @@
 9. 当前自动更新尚未实现。
 10. 当前尚未完成“中文路径 / 空格路径”在正式安装包链路中的跨平台验收。
 11. 调试构建与开发态不能混为一谈：打包后的 debug `.app` 也必须走 bundle 内后端，而不是误连本地 dev server；这一点已经在当前 Tauri 实现里修正。
+12. 首发阶段的 API key 仅保存在本机认证文件中；当前尚未接入 macOS Keychain 或 Windows Credential Manager。
 
 ## 6. 对外文案建议
 
@@ -231,7 +232,7 @@
    - 安装时由用户决定其路径
    - 用户可切换到自己的 knowledge-base，并可随时切回 companion knowledge-base
 4. `pi` 依赖的静默安装、可见性、登录与失败提示已形成可操作引导；当前仓库只完成了“桌面版应用内检测 + 托管安装”的过渡形态。
-5. API key 已落到平台可接受的本地安全存储方案。
+5. API key 已明确为“仅保存在本机认证文件中，不自动上传”的首发策略，且文档已清楚标注当前未接入系统级钥匙串。
 6. 应用内具备最小可用的 diagnostics 与日志导出能力，且默认只保存在本地。
 7. 首发支持矩阵已经明确：
    - Windows + macOS 同时可用

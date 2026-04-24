@@ -143,10 +143,53 @@ class PiRpcClient:
             return []
         return [item for item in models if isinstance(item, dict)]
 
+    async def get_session_stats(self, *, request_id: str | None = None) -> dict[str, Any]:
+        response = await self._send_command_and_wait_response(
+            command_type="get_session_stats",
+            payload={},
+            request_id=request_id,
+        )
+        return response.get("data") if isinstance(response.get("data"), dict) else {}
+
     async def abort(self, *, request_id: str | None = None) -> bool:
         command_id = (request_id or str(uuid.uuid4())).strip()
         await self._write_command({"id": command_id, "type": "abort"})
         logger.info("Pi RPC abort sent: id=%s", command_id)
+        return True
+
+    async def send_extension_ui_response(
+        self,
+        *,
+        ui_request_id: str,
+        value: str | None = None,
+        confirmed: bool | None = None,
+        cancelled: bool = False,
+    ) -> bool:
+        request_id = str(ui_request_id or "").strip()
+        if not request_id:
+            raise PiRpcError("Missing extension UI request id.")
+
+        payload: dict[str, Any] = {
+            "type": "extension_ui_response",
+            "id": request_id,
+        }
+        if cancelled:
+            payload["cancelled"] = True
+        elif value is not None:
+            payload["value"] = str(value)
+        elif confirmed is not None:
+            payload["confirmed"] = bool(confirmed)
+        else:
+            raise PiRpcError("Extension UI response requires value, confirmed, or cancelled.")
+
+        await self._write_command(payload)
+        logger.info(
+            "Pi RPC extension UI response sent: id=%s cancelled=%s has_value=%s has_confirmed=%s",
+            request_id,
+            cancelled,
+            value is not None,
+            confirmed is not None,
+        )
         return True
 
     async def new_session(
@@ -216,6 +259,23 @@ class PiRpcClient:
         response = await self._send_command_and_wait_response(
             command_type="set_model",
             payload={"provider": provider, "modelId": model_id},
+            request_id=request_id,
+        )
+        data = response.get("data")
+        return data if isinstance(data, dict) else {}
+
+    async def compact(
+        self,
+        *,
+        custom_instructions: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if custom_instructions and custom_instructions.strip():
+            payload["customInstructions"] = custom_instructions.strip()
+        response = await self._send_command_and_wait_response(
+            command_type="compact",
+            payload=payload,
             request_id=request_id,
         )
         data = response.get("data")

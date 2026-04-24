@@ -3,15 +3,17 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from datetime import datetime
 import logging
+import mimetypes
 import os
 from pathlib import Path
 import json
 import platform
 import shlex
+import shutil
 import subprocess
 from urllib import error as urllib_error
 from urllib import request as urllib_request
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 import uuid
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -36,18 +38,24 @@ from .config import (
     get_pi_extension_paths,
     get_pi_rpc_session_dir,
     get_pi_timeout_seconds,
+    get_startup_settings,
     is_desktop_runtime,
+    complete_startup_onboarding,
     set_knowledge_base_dir,
     upsert_model_provider_profile,
 )
 from .raw_service import (
+    create_raw_file,
+    delete_raw_file,
     get_raw_file,
     get_raw_file_path,
     list_raw_files,
+    save_raw_file,
     search_raw_files,
 )
+from .security_service import create_pi_security_approval, get_pi_security_settings, update_pi_security_settings
 from .skill_service import create_capability_file, delete_capability_file, get_capability_file, list_capability_entries, list_slash_commands, save_capability_file
-from .wiki_service import get_page, get_tree, list_pages, save_page, search_pages
+from .wiki_service import create_page, delete_page, get_page, get_tree, list_pages, save_page, search_pages
 from .session_manager import (
     get_session_pool,
     reset_session_pool,
@@ -90,6 +98,16 @@ ALLOWED_UPLOAD_EXTENSIONS = {
     ".jpeg",
     ".webp",
 }
+INBOX_TEXT_EXTENSIONS = {
+    ".md",
+    ".txt",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".csv",
+    ".tsv",
+}
+MARKDOWN_BROWSER_SOURCES = {"wiki", "raw", "inbox"}
 
 
 def _safe_path_payload(path: Path) -> dict[str, object]:
@@ -158,6 +176,93 @@ def _build_direct_pi_shell_command() -> str:
     )
 
 
+def _normalize_windows_shell_value(value: str) -> str:
+    raw = str(value or "")
+    if raw.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + raw[len("\\\\?\\UNC\\") :]
+    if raw.startswith("\\\\?\\"):
+        return raw[len("\\\\?\\") :]
+    return raw
+
+
+def _windows_cmd_quote(value: str) -> str:
+    escaped = _normalize_windows_shell_value(value).replace('"', '""')
+    return f'"{escaped}"'
+
+
+def _is_windows_batch_script(value: str) -> bool:
+    return Path(value).suffix.lower() in {".cmd", ".bat"}
+
+
+def _build_direct_pi_cmd_command() -> str:
+    pi_program = _normalize_windows_shell_value(get_pi_command_path() or get_pi_command())
+    pi_parts = [
+        f"call {_windows_cmd_quote(pi_program)}"
+        if _is_windows_batch_script(pi_program)
+        else _windows_cmd_quote(pi_program)
+    ]
+    for path in get_pi_extension_paths():
+        pi_parts.append("--extension")
+        pi_parts.append(_windows_cmd_quote(str(path)))
+
+    return " && ".join(
+        [
+            f"cd /d {_windows_cmd_quote(str(ROOT_DIR))}",
+            "echo.",
+            "echo Pi 已启动。若未自动触发登录，请输入 /login 命令。",
+            " ".join(pi_parts),
+        ]
+    )
+
+
+def _windows_powershell_quote(value: str) -> str:
+    escaped = _normalize_windows_shell_value(value).replace("'", "''")
+    return f"'{escaped}'"
+
+
+def _build_direct_pi_powershell_command() -> str:
+    pi_program = _normalize_windows_shell_value(get_pi_command_path() or get_pi_command())
+    pi_parts = ["&", _windows_powershell_quote(pi_program)]
+    for path in get_pi_extension_paths():
+        pi_parts.append("--extension")
+        pi_parts.append(_windows_powershell_quote(str(path)))
+
+    return "; ".join(
+        [
+            f"Set-Location -LiteralPath {_windows_powershell_quote(str(ROOT_DIR))}",
+            "Write-Host ''",
+            "Write-Host 'Pi started. If the login menu is not visible, type /login and press Enter.'",
+            " ".join(pi_parts),
+        ]
+    )
+
+
+def _run_windows_login_shell_keep_open(shell_command: str, cmd_fallback: str) -> None:
+    creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+    powershell = shutil.which("powershell.exe") or shutil.which("powershell")
+    if powershell:
+        subprocess.Popen(
+            [
+                powershell,
+                "-NoExit",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                shell_command,
+            ],
+            cwd=_normalize_windows_shell_value(str(ROOT_DIR)),
+            creationflags=creationflags,
+        )
+        return
+
+    subprocess.Popen(
+        f"cmd.exe /K {cmd_fallback}",
+        cwd=_normalize_windows_shell_value(str(ROOT_DIR)),
+        creationflags=creationflags,
+    )
+
+
 def _run_osascript_lines(lines: list[str]) -> None:
     command = ["osascript"]
     for line in lines:
@@ -174,16 +279,21 @@ def _applescript_escape(value: str) -> str:
 
 
 def _start_desktop_pi_login_direct() -> dict[str, object]:
-    if platform.system().lower() != "darwin":
-        raise RuntimeError("当前开发态兜底登录只实现了 macOS。")
+    system = platform.system().lower()
+    if system == "windows":
+        shell_command = _build_direct_pi_powershell_command()
+        _run_windows_login_shell_keep_open(shell_command, _build_direct_pi_cmd_command())
+    elif system == "darwin":
+        shell_command = _build_direct_pi_shell_command()
+        _run_osascript_lines(
+            [
+                'tell application "Terminal" to activate',
+                f'tell application "Terminal" to do script "{_applescript_escape(shell_command)}"',
+            ]
+        )
+    else:
+        raise RuntimeError("当前开发态兜底登录只实现了 macOS / Windows 终端拉起流程。")
 
-    shell_command = _build_direct_pi_shell_command()
-    _run_osascript_lines(
-        [
-            'tell application "Terminal" to activate',
-            f'tell application "Terminal" to do script "{_applescript_escape(shell_command)}"',
-        ]
-    )
     detail = "已打开 Pi 终端。请在终端里手动输入 `/login`，完成登录后 gogo-app 会自动刷新 Provider 状态。"
 
     return {
@@ -251,6 +361,7 @@ def _build_settings_diagnostics() -> dict[str, object]:
     kb_settings = get_knowledge_base_settings()
     agent_status = get_agent_backend_status()
     provider_settings = get_model_provider_settings()
+    security_settings = get_pi_security_settings()
     pi_install = _get_pi_install_status()
     session_dir = get_pi_rpc_session_dir()
     extension_paths = [str(path) for path in get_pi_extension_paths()]
@@ -309,6 +420,7 @@ def _build_settings_diagnostics() -> dict[str, object]:
             "defaults": provider_settings.get("defaults") or {},
             "extension_paths": extension_paths,
         },
+        "security": security_settings,
         "pi_runtime": {
             "command": agent_status.get("pi_command"),
             "command_path": agent_status.get("pi_command_path"),
@@ -376,8 +488,30 @@ class UpdateSessionSettingsRequest(BaseModel):
     model_id: str | None = Field(default=None, description="模型 ID")
 
 
+class CompactSessionRequest(BaseModel):
+    custom_instructions: str = Field(default="", description="可选：compact 时附带的额外说明")
+
+
 class UpdateKnowledgeBaseRequest(BaseModel):
     path: str = Field(..., min_length=1, description="本地知识库路径")
+
+
+class UpdatePiSecurityRequest(BaseModel):
+    mode: str = Field(..., description="安全模式：readonly / workspace-write / full-access")
+
+
+class CreatePiSecurityApprovalRequest(BaseModel):
+    tool_name: str = Field(..., description="工具名称：bash / write / edit")
+    command: str = Field(default="", description="需要单次放行的 bash 命令")
+    path: str = Field(default="", description="需要单次放行的原始路径")
+    resolved_path: str = Field(default="", description="前端已解析出的绝对路径")
+
+
+class ExtensionUiResponseRequest(BaseModel):
+    id: str = Field(..., min_length=1, description="Pi extension_ui_request 的 id")
+    value: str | None = Field(default=None, description="select / input / editor 的返回值")
+    confirmed: bool | None = Field(default=None, description="confirm 的布尔结果")
+    cancelled: bool = Field(default=False, description="是否取消当前交互")
 
 
 class UpsertModelProviderRequest(BaseModel):
@@ -449,6 +583,60 @@ def _resolve_request_id(raw_request_id: str | None) -> str:
     if raw_request_id and raw_request_id.strip():
         return raw_request_id.strip()
     return str(uuid.uuid4())
+
+
+def _normalize_context_usage(raw_usage: object) -> dict[str, object] | None:
+    if not isinstance(raw_usage, dict):
+        return None
+
+    tokens = raw_usage.get("tokens")
+    context_window = raw_usage.get("contextWindow")
+    percent = raw_usage.get("percent")
+
+    normalized: dict[str, object] = {}
+    if isinstance(tokens, (int, float)):
+        normalized["tokens"] = max(0, int(tokens))
+    elif tokens is None:
+        normalized["tokens"] = None
+
+    if isinstance(context_window, (int, float)):
+        normalized["contextWindow"] = max(0, int(context_window))
+
+    if isinstance(percent, (int, float)):
+        normalized["percent"] = max(0.0, min(100.0, float(percent)))
+    elif (
+        isinstance(normalized.get("tokens"), int)
+        and isinstance(normalized.get("contextWindow"), int)
+        and int(normalized["contextWindow"]) > 0
+    ):
+        normalized["percent"] = min(
+            100.0,
+            max(0.0, (int(normalized["tokens"]) / int(normalized["contextWindow"])) * 100.0),
+        )
+    else:
+        normalized["percent"] = None
+
+    return normalized or None
+
+
+def _session_payload_with_runtime(session_id: str, *, pool=None) -> dict[str, object]:
+    active_pool = pool or get_session_pool()
+    session = active_pool.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+
+    payload = session.info.to_dict()
+
+    try:
+        stats = active_pool.get_session_stats(session_id)
+    except Exception:
+        logger.warning("Failed to load session stats for %s", session_id, exc_info=True)
+        stats = {}
+
+    payload["context_usage"] = _normalize_context_usage(stats.get("contextUsage"))
+    tokens = stats.get("tokens")
+    payload["token_usage"] = tokens if isinstance(tokens, dict) else None
+    return payload
 
 
 def _frontend_file_response(path: Path) -> FileResponse:
@@ -528,12 +716,30 @@ def _inbox_item_payload(path: Path, *, inbox_dir: Path, knowledge_base_name: str
     stat = path.stat()
     relative = f"inbox/{path.relative_to(inbox_dir).as_posix()}"
     kind, type_label = _inbox_type_info(path)
+    rel_parent = path.parent.relative_to(inbox_dir).as_posix()
+    content_type = _guess_inbox_content_type(path)
+    is_text = _is_inbox_textual(path)
     return {
+        "source": "inbox",
         "name": path.name,
+        "title": path.name,
         "path": relative,
+        "summary": _inbox_summary(path),
+        "category": "inbox",
+        "section": rel_parent if rel_parent not in {"", "."} else "root",
         "kind": kind,
         "type_label": type_label,
         "extension": path.suffix.lower(),
+        "content_type": content_type,
+        "is_text": is_text,
+        "render_mode": _inbox_render_mode(path, content_type),
+        "download_url": f"/inbox/file?path={quote(relative, safe='/')}",
+        "preview_url": (
+            f"/inbox/file?path={quote(relative, safe='/')}"
+            if content_type == "application/pdf" or content_type.startswith("image/")
+            else None
+        ),
+        "size": stat.st_size,
         "size_bytes": stat.st_size,
         "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
         "status": "pending",
@@ -564,6 +770,233 @@ def _resolve_inbox_path(raw_path: str, *, inbox_dir: Path) -> Path:
         raise HTTPException(status_code=404, detail="指定的 inbox 文件不存在。")
 
     return resolved
+
+
+def _resolve_inbox_target_path(raw_path: str, *, inbox_dir: Path) -> Path:
+    candidate = str(raw_path or "").strip()
+    if not candidate:
+        raise HTTPException(status_code=400, detail="缺少 Markdown 文件路径。")
+
+    if candidate.startswith("inbox/"):
+        candidate = candidate[len("inbox/") :]
+
+    resolved = (inbox_dir / Path(candidate)).resolve()
+    inbox_root = inbox_dir.resolve()
+    try:
+        resolved.relative_to(inbox_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="非法的 inbox 文件路径。") from exc
+
+    if resolved.suffix.lower() != ".md":
+        raise HTTPException(status_code=400, detail="Inbox 里目前只支持创建和保存 .md 文件。")
+
+    return resolved
+
+
+def _write_text_file(path: Path, content: str) -> None:
+    normalized_content = str(content).replace("\r\n", "\n")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f".{path.name}.tmp")
+    temp_path.write_text(normalized_content, encoding="utf-8")
+    temp_path.replace(path)
+
+
+def _guess_inbox_content_type(path: Path) -> str:
+    guessed, _ = mimetypes.guess_type(path.name)
+    return guessed or "application/octet-stream"
+
+
+def _is_inbox_textual(path: Path) -> bool:
+    return path.suffix.lower() in INBOX_TEXT_EXTENSIONS
+
+
+def _read_inbox_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def _summary_from_text(text: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith(("#", "-", "*", ">", "`")):
+            continue
+        return stripped[:180]
+    return "No summary available yet."
+
+
+def _inbox_summary(path: Path) -> str:
+    if _is_inbox_textual(path):
+        return _summary_from_text(_read_inbox_text(path))
+
+    content_type = _guess_inbox_content_type(path)
+    if content_type == "application/pdf":
+        return "PDF material in inbox."
+    if content_type.startswith("image/"):
+        return "Image file in inbox."
+    return f"{content_type} file in inbox."
+
+
+def _inbox_render_mode(path: Path, content_type: str) -> str:
+    if path.suffix.lower() == ".md":
+        return "markdown"
+    if _is_inbox_textual(path):
+        return "text"
+    if content_type == "application/pdf":
+        return "pdf"
+    if content_type.startswith("image/"):
+        return "image"
+    return "binary"
+
+
+def _knowledge_base_name_for_inbox(kb_dir: Path) -> str:
+    kb_settings = get_knowledge_base_settings()
+    return str(kb_settings.get("name") or Path(kb_dir).name)
+
+
+def _list_inbox_browser_items(*, include_content: bool = False) -> list[dict[str, object]]:
+    kb_dir = get_knowledge_base_dir()
+    inbox_dir = kb_dir / "inbox"
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+    knowledge_base_name = _knowledge_base_name_for_inbox(kb_dir)
+
+    items: list[dict[str, object]] = []
+    for path in sorted(
+        [
+            item
+            for item in inbox_dir.rglob("*")
+            if item.is_file() and _should_show_inbox_file(item, inbox_dir=inbox_dir)
+        ],
+        key=lambda item: item.stat().st_mtime,
+        reverse=True,
+    ):
+        payload = _inbox_item_payload(
+            path,
+            inbox_dir=inbox_dir,
+            knowledge_base_name=knowledge_base_name,
+        )
+        if include_content and payload.get("is_text"):
+            payload["content"] = _read_inbox_text(path)
+        items.append(payload)
+    return items
+
+
+def _get_inbox_browser_item(raw_path: str, *, include_content: bool = True) -> dict[str, object]:
+    kb_dir = get_knowledge_base_dir()
+    inbox_dir = kb_dir / "inbox"
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+    knowledge_base_name = _knowledge_base_name_for_inbox(kb_dir)
+    path = _resolve_inbox_path(raw_path, inbox_dir=inbox_dir)
+    payload = _inbox_item_payload(
+        path,
+        inbox_dir=inbox_dir,
+        knowledge_base_name=knowledge_base_name,
+    )
+    if include_content and payload.get("is_text"):
+        payload["content"] = _read_inbox_text(path)
+    return payload
+
+
+def _search_inbox_browser_items(query: str, *, limit: int = 20) -> list[dict[str, object]]:
+    normalized_query = str(query or "").strip().lower()
+    if not normalized_query:
+        return _list_inbox_browser_items()[:limit]
+
+    matches: list[dict[str, object]] = []
+    for item in _list_inbox_browser_items(include_content=True):
+        haystacks = [
+            str(item.get("title") or "").lower(),
+            str(item.get("path") or "").lower(),
+            str(item.get("summary") or "").lower(),
+            str(item.get("type_label") or "").lower(),
+            str(item.get("kind") or "").lower(),
+            str(item.get("content") or "").lower(),
+        ]
+        if any(normalized_query in haystack for haystack in haystacks if haystack):
+            item_copy = dict(item)
+            item_copy.pop("content", None)
+            matches.append(item_copy)
+        if len(matches) >= limit:
+            break
+    return matches
+
+
+def _normalize_markdown_browser_source(source: str) -> str:
+    normalized = str(source or "").strip().lower()
+    if normalized not in MARKDOWN_BROWSER_SOURCES:
+        raise HTTPException(status_code=400, detail="Markdown 只支持保存到 wiki、raw 或 inbox。")
+    return normalized
+
+
+def _create_inbox_markdown_file(relative_path: str, content: str = "") -> dict[str, object]:
+    kb_dir = get_knowledge_base_dir()
+    inbox_dir = kb_dir / "inbox"
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+    target_path = _resolve_inbox_target_path(relative_path, inbox_dir=inbox_dir)
+    if target_path.exists():
+        raise FileExistsError(relative_path)
+    _write_text_file(target_path, content)
+    return _get_inbox_browser_item(f"inbox/{target_path.relative_to(inbox_dir).as_posix()}", include_content=True)
+
+
+def _save_inbox_markdown_file(relative_path: str, content: str) -> dict[str, object]:
+    kb_dir = get_knowledge_base_dir()
+    inbox_dir = kb_dir / "inbox"
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+    target_path = _resolve_inbox_target_path(relative_path, inbox_dir=inbox_dir)
+    if not target_path.exists() or not target_path.is_file():
+        raise FileNotFoundError(relative_path)
+    _write_text_file(target_path, content)
+    return _get_inbox_browser_item(f"inbox/{target_path.relative_to(inbox_dir).as_posix()}", include_content=True)
+
+
+def _delete_inbox_markdown_file(relative_path: str) -> dict[str, object]:
+    kb_dir = get_knowledge_base_dir()
+    inbox_dir = kb_dir / "inbox"
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+    target_path = _resolve_inbox_target_path(relative_path, inbox_dir=inbox_dir)
+    if not target_path.exists() or not target_path.is_file():
+        raise FileNotFoundError(relative_path)
+
+    record = _get_inbox_browser_item(f"inbox/{target_path.relative_to(inbox_dir).as_posix()}", include_content=False)
+    target_path.unlink()
+
+    for parent in target_path.parents:
+        if parent == inbox_dir:
+            break
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+
+    return record
+
+
+def _create_markdown_browser_file(source: str, relative_path: str, content: str = "") -> dict[str, object]:
+    normalized_source = _normalize_markdown_browser_source(source)
+    if normalized_source == "wiki":
+        return create_page(relative_path, content)
+    if normalized_source == "raw":
+        return create_raw_file(relative_path, content)
+    return _create_inbox_markdown_file(relative_path, content)
+
+
+def _save_markdown_browser_file(source: str, relative_path: str, content: str) -> dict[str, object]:
+    normalized_source = _normalize_markdown_browser_source(source)
+    if normalized_source == "wiki":
+        return save_page(relative_path, content)
+    if normalized_source == "raw":
+        return save_raw_file(relative_path, content)
+    return _save_inbox_markdown_file(relative_path, content)
+
+
+def _delete_markdown_browser_file(source: str, relative_path: str) -> dict[str, object]:
+    normalized_source = _normalize_markdown_browser_source(source)
+    if normalized_source == "wiki":
+        return delete_page(relative_path)
+    if normalized_source == "raw":
+        return delete_raw_file(relative_path)
+    return _delete_inbox_markdown_file(relative_path)
 
 
 @app.get("/", include_in_schema=False)
@@ -601,12 +1034,46 @@ def get_app_settings() -> dict[str, object]:
         "knowledge_base": get_knowledge_base_settings(),
         "model_providers": get_model_provider_settings(),
         "pi_install": _get_pi_install_status(),
+        "startup": get_startup_settings(),
     }
 
 
 @app.get("/api/settings/diagnostics")
 def get_settings_diagnostics() -> dict[str, object]:
     return _build_settings_diagnostics()
+
+
+@app.patch("/api/settings/security")
+def update_settings_security(request: UpdatePiSecurityRequest) -> dict[str, object]:
+    try:
+        security = update_pi_security_settings(request.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    reset_session_pool()
+    return {
+        "success": True,
+        "security": security,
+        "detail": "Pi 安全模式已更新；后续会话请求会按新规则重新启动。",
+    }
+
+
+@app.post("/api/settings/security/approval")
+def create_settings_security_approval(request: CreatePiSecurityApprovalRequest) -> dict[str, object]:
+    try:
+        approval = create_pi_security_approval(request.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return {
+        "success": True,
+        "approval": approval,
+        "detail": "已创建单次安全放行；Pi 下次命中同一操作时会自动消费。",
+    }
 
 
 @app.patch("/api/settings/knowledge-base")
@@ -619,7 +1086,17 @@ def update_knowledge_base(request: UpdateKnowledgeBaseRequest) -> dict[str, obje
     return {
         "success": True,
         "knowledge_base": settings,
+        "startup": get_startup_settings(),
         "detail": "知识库已切换，会话目录已按知识库隔离。",
+    }
+
+
+@app.post("/api/settings/startup/complete")
+def finish_startup_onboarding() -> dict[str, object]:
+    return {
+        "success": True,
+        "startup": complete_startup_onboarding(),
+        "detail": "首次启动引导已完成。",
     }
 
 
@@ -789,35 +1266,37 @@ async def upload_inbox_file(request: Request) -> dict[str, object]:
 
 @app.get("/api/knowledge-base/inbox/files")
 def inbox_files() -> dict[str, object]:
-    kb_dir = get_knowledge_base_dir()
-    inbox_dir = kb_dir / "inbox"
-    inbox_dir.mkdir(parents=True, exist_ok=True)
     kb_settings = get_knowledge_base_settings()
-    knowledge_base_name = str(kb_settings.get("name") or Path(kb_dir).name)
-
-    items: list[dict[str, object]] = []
-    for path in sorted(
-        [
-            item
-            for item in inbox_dir.rglob("*")
-            if item.is_file() and _should_show_inbox_file(item, inbox_dir=inbox_dir)
-        ],
-        key=lambda item: item.stat().st_mtime,
-        reverse=True,
-    ):
-        items.append(
-            _inbox_item_payload(
-                path,
-                inbox_dir=inbox_dir,
-                knowledge_base_name=knowledge_base_name,
-            )
-        )
+    items = _list_inbox_browser_items()
 
     return {
         "knowledge_base": kb_settings,
         "items": items,
         "count": len(items),
     }
+
+
+@app.get("/api/inbox/files")
+def inbox_browser_files() -> dict[str, object]:
+    items = _list_inbox_browser_items()
+    return {"items": items, "count": len(items)}
+
+
+@app.get("/api/inbox/file")
+def inbox_browser_file(path: str = Query(..., description="Relative file path inside inbox/")) -> dict[str, object]:
+    try:
+        return _get_inbox_browser_item(path, include_content=True)
+    except HTTPException:
+        raise
+
+
+@app.get("/api/inbox/search")
+def inbox_browser_search(
+    q: str = Query("", description="Search query"),
+    limit: int = Query(20, ge=1, le=100),
+) -> dict[str, object]:
+    items = _search_inbox_browser_items(q, limit=limit)
+    return {"items": items, "count": len(items), "query": q}
 
 
 @app.delete("/api/knowledge-base/inbox/files")
@@ -950,6 +1429,73 @@ class WikiPageUpdateRequest(BaseModel):
     content: str = Field(..., description="Updated markdown content")
 
 
+class WikiPageCreateRequest(BaseModel):
+    path: str = Field(..., min_length=1, description="Relative markdown path inside wiki/")
+    content: str = Field("", description="Initial markdown content")
+
+
+@app.post("/api/wiki/page")
+def create_wiki_page(payload: WikiPageCreateRequest) -> dict[str, object]:
+    try:
+        return create_page(payload.path, payload.content)
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=f"Wiki page already exists: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class MarkdownBrowserFileCreateRequest(BaseModel):
+    source: str = Field(..., min_length=1, description="wiki | raw | inbox")
+    path: str = Field(..., min_length=1, description="Relative markdown path inside selected source root")
+    content: str = Field("", description="Initial markdown content")
+
+
+class MarkdownBrowserFileUpdateRequest(BaseModel):
+    source: str = Field(..., min_length=1, description="wiki | raw | inbox")
+    path: str = Field(..., min_length=1, description="Relative markdown path inside selected source root")
+    content: str = Field(..., description="Updated markdown content")
+
+
+@app.post("/api/markdown-file")
+def create_markdown_browser_file(payload: MarkdownBrowserFileCreateRequest) -> dict[str, object]:
+    try:
+        return _create_markdown_browser_file(payload.source, payload.path, payload.content)
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=f"Markdown file already exists: {exc}") from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Markdown file not found: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.patch("/api/markdown-file")
+def update_markdown_browser_file(payload: MarkdownBrowserFileUpdateRequest) -> dict[str, object]:
+    try:
+        return _save_markdown_browser_file(payload.source, payload.path, payload.content)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Markdown file not found: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/markdown-file")
+def delete_markdown_browser_file(
+    source: str = Query(..., min_length=1, description="wiki | raw | inbox"),
+    path: str = Query(..., min_length=1, description="Relative markdown path inside selected source root"),
+) -> dict[str, object]:
+    try:
+        record = _delete_markdown_browser_file(source, path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"Markdown file not found: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "success": True,
+        "detail": f"已删除 {source} 里的 Markdown：{path}",
+        "file": record,
+    }
+
+
 @app.patch("/api/wiki/page")
 def update_wiki_page(
     payload: WikiPageUpdateRequest,
@@ -1070,6 +1616,16 @@ def raw_file_download(path: str = Query(..., description="Relative file path ins
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/inbox/file", include_in_schema=False)
+def inbox_file_download(path: str = Query(..., description="Relative file path inside inbox/")) -> FileResponse:
+    kb_dir = get_knowledge_base_dir()
+    inbox_dir = kb_dir / "inbox"
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+    file_path = _resolve_inbox_path(path, inbox_dir=inbox_dir)
+    media_type = "application/pdf" if file_path.suffix.lower() == ".pdf" else None
+    return FileResponse(file_path, media_type=media_type)
+
+
 # ===========================
 # Session 管理 API
 # ===========================
@@ -1096,7 +1652,7 @@ def create_session(request: CreateSessionRequest) -> dict[str, object]:
     session = pool.get_session(session_id)
     if not session:
         raise HTTPException(status_code=500, detail="Session created but not found in pool")
-    return {"session_id": session_id, "session": session.info.to_dict()}
+    return {"session_id": session_id, "session": _session_payload_with_runtime(session_id, pool=pool)}
 
 
 @app.delete("/api/sessions/{session_id}")
@@ -1153,17 +1709,67 @@ def update_session_settings(session_id: str, request: UpdateSessionSettingsReque
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    return {"success": True, "session_id": session_id, "session": session}
+    return {
+        "success": True,
+        "session_id": session_id,
+        "session": _session_payload_with_runtime(session_id, pool=pool),
+    }
 
 
 @app.get("/api/sessions/{session_id}")
 def get_session(session_id: str) -> dict[str, object]:
     """获取会话详情"""
     pool = get_session_pool()
+    return {"session": _session_payload_with_runtime(session_id, pool=pool)}
+
+
+@app.get("/api/sessions/{session_id}/stats")
+def get_session_stats(session_id: str) -> dict[str, object]:
+    pool = get_session_pool()
     session = pool.get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
-    return {"session": session.info.to_dict()}
+
+    try:
+        stats = pool.get_session_stats(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return {
+        "session_id": session_id,
+        "context_usage": _normalize_context_usage(stats.get("contextUsage")),
+        "token_usage": stats.get("tokens") if isinstance(stats.get("tokens"), dict) else None,
+    }
+
+
+@app.post("/api/sessions/{session_id}/compact")
+def compact_session(session_id: str, request: CompactSessionRequest) -> dict[str, object]:
+    pool = get_session_pool()
+    try:
+        payload = pool.compact_session(
+            session_id,
+            custom_instructions=request.custom_instructions,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    stats = payload.get("stats") if isinstance(payload, dict) else {}
+    result = payload.get("result") if isinstance(payload, dict) else {}
+    return {
+        "success": True,
+        "session_id": session_id,
+        "result": result if isinstance(result, dict) else {},
+        "context_usage": _normalize_context_usage(stats.get("contextUsage") if isinstance(stats, dict) else None),
+        "token_usage": stats.get("tokens") if isinstance(stats, dict) and isinstance(stats.get("tokens"), dict) else None,
+    }
 
 
 @app.get("/api/sessions/{session_id}/history")
@@ -1200,6 +1806,19 @@ def abort_session_response(session_id: str) -> dict[str, object]:
     result = pool.abort_pending_request(session_id)
     if not result.get("success"):
         detail = str(result.get("detail") or "Abort failed.")
+        if detail.startswith("Session not found:"):
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=409, detail=detail)
+    return result
+
+
+@app.post("/api/sessions/{session_id}/extension-ui-response")
+def respond_session_extension_ui(session_id: str, request: ExtensionUiResponseRequest) -> dict[str, object]:
+    """把前端的 extension UI 结果回写给当前 Pi RPC 请求"""
+    pool = get_session_pool()
+    result = pool.respond_extension_ui_request(session_id, request.model_dump())
+    if not result.get("success"):
+        detail = str(result.get("detail") or "Extension UI response failed.")
         if detail.startswith("Session not found:"):
             raise HTTPException(status_code=404, detail=detail)
         raise HTTPException(status_code=409, detail=detail)

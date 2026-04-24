@@ -4,7 +4,7 @@
 > 项目级架构参考：[gogo-project-architecture.md](docs/gogo-project-architecture.md)  
 > 应用架构参考：[gogo-app-architecture.md](docs/gogo-app-architecture.md)
 
-**最后更新**: 2026-04-17
+**最后更新**: 2026-04-24
 
 ## 相关任务文档
 
@@ -80,12 +80,28 @@
   - 结论：保留 `consulted_pages`，但将其明确为应用层 UI 元数据，只表示“后端预检索到并展示给前端的候选页面”，不是 knowledge-base 规范的一部分，也不是主 session 链路的权威 grounding 元数据。
   - 当前策略：主产品路径继续以 session + Pi 原生会话 + 工具调用为主；固定检索与 `consulted_pages` 仅服务于 legacy no-session 兼容路径。
 
+- [ ] 规划 Agent runtime 抽象，支持“外接本地 coding agent + bundled Pi fallback”
+  - [ ] 将当前 Pi-only 架构提升为 runtime manager + adapter 结构，而不是让 Agent 层默认等于 `pi --mode rpc`
+  - [ ] 明确 bundled Pi、system Pi、ACP agent 三类 runtime profile 的配置模型、诊断模型与切换语义
+  - [ ] 评估并设计 ACP 接入层，优先对接 `initialize`、`session/new`、`session/load`、`session/prompt`、`session/cancel`、`session/update` 与 permission request 映射
+  - [ ] 明确 Claude Code、Codex 等外部 agent 的接入边界：默认通过 ACP-compatible agent 或 bridge 接入，不在 `gogo-app` 中直接实现各家私有协议
+  - [ ] 保留 bundled Pi runtime 作为默认体验和 fallback 路径，避免外接 agent 配置失败时整条聊天主链路不可用
+  - 参考文档：`docs/workspace-and-agent-runtime-refactor-plan.md`
+
 ### 1. gogo-app 与外部 knowledge-base 的连接质量
 
 - [x] 明确 `KNOWLEDGE_BASE_DIR` 接入体验
 - [x] 提升知识库切换/初始化时的错误提示
 - [x] 明确 gogo-app 如何发现并展示当前连接的 knowledge-base 信息
 - 结论：后端已支持运行时读取与切换知识库目录，前端设置面板可展示当前知识库名称、路径与最近使用列表；切换失败时会明确提示“目录不存在”“缺少 `wiki/` / `raw/` 子目录”等错误；切换知识库后会按知识库 namespace 隔离 session 存储，避免不同知识库的会话互相混淆。
+
+- [ ] 规划内容工作区抽象，解除 `wiki/raw` 目录强绑定
+  - [ ] 将当前“知识库目录”抽象为更通用的 workspace descriptor，至少区分 `knowledge-base` 与 `markdown-folder` 两种模式
+  - [ ] 明确 `markdown-folder` 模式第一阶段支持范围：Markdown 浏览、搜索、编辑、新建、删除
+  - [ ] 明确 `raw / inbox / skills / schemas / AGENTS.md` 在普通 Markdown 工作区中的降级策略，避免 UI 与后端继续假设这些目录恒定存在
+  - [ ] 调整启动引导、diagnostics、桌面 provision 文案与错误提示，使其围绕“工作区”而不是固定 `knowledge-base/wiki/raw` 结构
+  - [ ] 评估新的 workspace 抽象对安全边界、session namespace 和桌面 companion knowledge-base 路径选择的影响
+  - 参考文档：`docs/workspace-and-agent-runtime-refactor-plan.md`
 
 ### 2. 桌面应用封装
 
@@ -134,7 +150,7 @@
   - 结论：设置面板已新增“当前技能”分栏，左侧按 Skills / Schemas / 支持文件分组展示当前知识库识别到的能力，右侧提供最小文本编辑器直接编辑原始定义；除了主 skill/schema 定义外，还会识别并展示相关的 `README.md`、`AGENTS.md`，以及知识库根目录的 `AGENTS.md`。同时支持一键新建最小模板的 skill / schema，并支持删除当前选中的主能力定义。该分栏与 Chat 输入框中的 slash 自动补全保持同源：slash 继续只使用 `/api/knowledge-base/slash-commands`，设置面板则使用扩展后的 `/api/knowledge-base/capabilities`，从而既保证命令列表干净，又能编辑完整支持文件。
 - [ ] 规划并落地从当前开发态到“可分发给最终用户”的桌面安装包链路（Windows / macOS）
   - [ ] 明确发布目标与边界：区分“开发者可运行的桌面版”和“最终用户双击可安装的桌面版”，并在 README / docs 中写清当前支持范围、外部依赖与已知限制
-  - [ ] 启用 Tauri 正式 bundle 配置，明确 Windows 与 macOS 的目标产物形态（至少包含 `msi` 或等价安装器，以及 `.app + dmg` 或等价 macOS 安装包）
+  - [ ] 启用 Tauri 正式 bundle 配置，明确 Windows 与 macOS 的目标产物形态（至少包含 `NSIS setup.exe` 或等价安装器，以及 `.app + dmg` 或等价 macOS 安装包）
   - [ ] 明确并实现后端交付策略：是内置 Python 运行时、内置虚拟环境、还是在安装阶段生成受控运行时；避免打包版继续依赖源码目录下的 `.venv`、`uv` 或系统 Python
   - [ ] 明确并实现应用资源装载策略：让打包版能够在脱离仓库源码目录后仍正确定位 `app/backend/`、`app/frontend/`、图标与其他运行资源，而不是继续假设工作目录就是仓库根目录
   - [ ] 明确 `knowledge-base` 的交付边界：是要求用户首次启动时手动选择已有 knowledge-base，还是提供示例知识库 / 首次启动向导；同时补齐“目录不存在 / 缺少 `wiki/` / `raw/` / `inbox/`”等安装后引导
@@ -197,6 +213,22 @@
   - 结论：右下角已新增常驻 `Inbox` 入口与浮窗面板；面板会展示当前知识库 `inbox/` 文件名、类型、大小、更新时间，并保持可持续可见，不再依赖聊天区的一条 assistant 提示。
   - 结论：上传成功后会自动刷新并打开 `Inbox` 面板，高亮新文件，同时用轻量提示条提示“已上传到 inbox/...”；聊天区不再额外插入上传成功消息。
   - 结论：每个文件卡片都提供“一键插入 ingest 提示词”，插入后会把该文件状态显示为“提示词已准备”，让用户更清楚下一步就是发送给 Pi。
+- [x] 优化 Chat / Wiki / Inbox 浮窗的默认展开与收起行为
+  - [x] 修复切换 `chat/wiki` 模式时自动弹出对应浮窗的问题，改为保留用户当前展开状态，而不是模式切换即强制打开
+  - [x] 统一 `chat/wiki/inbox` 三种浮窗的“点击浮窗外区域自动收回”交互，并处理事件冒泡、遮罩层与拖拽/滚动冲突
+  - [x] 明确浮窗显隐状态的优先级：模式切换、首次进入页面、上传完成、引用/写回插入提示词、手动点击按钮之间不能互相抢状态
+  - [x] 补一轮回归：切换模式、上传文件、打开 Inbox、进入 Wiki 详情、返回聊天时都不应出现意外自动弹出或无法收起
+- [x] 优化 Chat 输入区底部工具栏的布局与命令菜单显示
+  - [x] 修复发送按钮与模型/思考/命令按钮互相遮挡的问题，覆盖常见窗口宽度、长 placeholder、系统缩放和桌面壳内嵌场景
+  - [x] 调整底部按钮组的间距、尺寸、换行/滚动策略，避免命令按钮显示不全、被裁切或视觉权重失衡
+  - [x] 优化各类命令按钮与弹出菜单的样式层级，降低当前“图标过挤、文案截断、面板贴边”的问题，确保中英文文案都可读
+  - [x] 补桌面端截图回归，重点覆盖窄窗口、长命令列表、打开安全模式菜单与上下文提示卡并存时的布局稳定性
+- [x] 打通 Wiki 与 Inbox 的联动浏览和文件创建能力
+  - [x] 让 Wiki 视图可以看到当前知识库 `inbox/` 中的文件，明确它是作为独立分组、侧栏节点，还是与现有 Wiki 树并列展示
+  - [x] 明确 Inbox 文件在 Wiki 中的可见范围与只读/可操作边界，至少支持查看基础元信息，并能从 Wiki 侧跳转到对应 Inbox 操作
+  - [x] 在 Wiki 中支持新建 `.md` 文件，明确新建入口、默认目录、文件名校验、重名处理与创建后自动进入编辑态/详情态的交互
+  - [x] 评估是否需要复用现有 Wiki 编辑能力与后端保存接口，避免为“新建 md”单独再做一套保存链路
+  - [x] 补充端到端回归：新建 Markdown、保存、刷新后仍可见；Inbox 文件在 Wiki 可见且不会误混入正式 Wiki 文档树
 - [x] 会话管理行为对齐 ChatGPT 网页体验
   - [x] 引入“草稿聊天态（无 session）”与“持久会话态（有 session_id）”双态模型
   - [x] 页面初始化不自动创建会话；仅加载会话列表并恢复最近活跃会话（若存在）
@@ -293,10 +325,10 @@
 - [x] 首发平台：Windows + macOS 必须同时支持；Linux 仅保留开发态
 - [x] 正式产品形态：只认桌面版；Web 版不作为正式对外产品
 - [x] companion knowledge-base：随安装包提供，安装时由用户决定路径，安装后保留为可随时切回的示例库
-- [x] `pi` 依赖策略：安装器检测并静默安装 `pi`
-- [x] 首次启动主路径：检测/安装 `pi` -> 配置模型/API key（可跳过） -> 进入 companion knowledge-base -> 已配置模型时跑 demo，未配置时可先浏览 Wiki
+- [x] `pi` 依赖策略：首发优先使用 bundled `pi` 运行时；未检测到 bundled / system `pi` 时，再走应用内托管安装作为 fallback
+- [x] 首次启动主路径：优先检测 bundled / system `pi`，必要时引导安装 -> 配置模型/API key（可跳过） -> 进入 companion knowledge-base -> 已配置模型时跑 demo，未配置时可先浏览 Wiki
 - [x] 首发模型配置范围：支持 API key 型 provider，以及 `pi` 已稳定支持且桌面引导已验证通过的 OAuth
-- [x] API key 存储策略：本地安全存储
+- [x] API key 存储策略：首发阶段仅保存在本机认证文件中，不自动上传，暂不接入 macOS Keychain / Windows Credential Manager
 - [x] 首发最低成功标准：用户配置模型后，能完整跑通一次上传、ingest、聊天、写回
 - [x] 首发兼容要求：必须支持中文路径与带空格路径
 - [x] 联网边界：聊天依赖用户自己配置并联网访问的模型；知识库浏览与编辑可断网
@@ -315,50 +347,92 @@
 #### 4.2 Phase 2: 安装器、Runtime 与资源交付
 
 - [ ] 完成 Windows / macOS 安装包链路
-  - [x] 启用并稳定 Tauri 正式 bundle，并验证发布态资源映射可稳定产出 macOS 调试构建的 `.app + .dmg` 产物；Windows 安装介质仍待补齐
+  - [x] 启用并稳定 Tauri 正式 bundle，并验证发布态资源映射可稳定产出 macOS release `.app + .dmg` 产物；Windows 安装介质仍待补齐
   - [x] 将当前 `desktop:build` 从 Unix shell 主链重构为真正跨平台可运行的构建入口：现已改为 Node 脚本，避免 Windows 打包依赖 `sh`、`rm`、`mv`、`find`
   - [x] 补齐 Windows 构建适配的代码侧主链：当前 `desktop:build` 已可在代码层构建独立后端 runtime、staging bundled `pi` 并继续调用 Tauri bundle；实机/CI 验证仍留给下一条任务
-  - [ ] 在 Windows 本机或 Windows CI runner 上验证 `npm run desktop:build`，确认可产出 `backend-runtime/gogo-backend.exe` 与最终安装介质（至少 `msi`）
-  - [x] 明确 Windows 首发安装介质策略：首发先收敛为 `msi`，NSIS `-setup.exe` 暂不作为首发必做项
+  - [x] 在 Windows 本机或 Windows CI runner 上验证 `npm run desktop:build`，确认可产出 `backend-runtime/gogo-backend.exe` 与最终安装介质（至少 `NSIS setup.exe`）
+    - [x] 已在 Windows LTSC 2019 本机补齐 Rust MSVC / WebView2 / VS 2019 Build Tools，并验证 `desktop:build` 可产出 `desktop-runtime-staging/backend/gogo-backend.exe`
+    - [x] 已补齐 Windows 打包所需的 `src-tauri/icons/icon.ico`，Tauri build 不再被缺失图标阻塞
+    - [x] 已定位并修复 `scripts/desktop-build.mjs` 在 Windows 上直接 `spawn` 本地 `tauri.cmd` 导致的 `spawn EINVAL`
+    - [x] 已确认切换到 `NSIS setup.exe` 后可绕开 WiX / `msi` 阶段，Windows 打包已成功进入 NSIS bundle 阶段
+    - [x] 已通过预置 NSIS 依赖缓存解决在线下载超时，当前 Windows 本机构建已成功产出 `src-tauri/target/release/bundle/nsis/gogo-app_0.1.0_x64-setup.exe`
+  - [x] 明确 Windows 首发安装介质策略：首发先收敛为 `NSIS setup.exe`，不再把 `msi` 作为首发必做项
+    - [x] 修复 Windows NSIS 安装模式过于隐式的问题：安装器已改为 `installMode=both`，让用户明确选择“仅当前用户”或“所有用户”；安装到 `Program Files` 等路径时应选择“所有用户”以触发管理员权限
   - [x] 完成桌面后端运行时交付：`desktop:build` 会先构建独立的 PyInstaller 后端 runtime，并验证其可脱离源码目录与开发态 `.venv` 启动；发布态优先启动 bundle 内的 `backend-runtime`
   - [x] 实现 companion knowledge-base 随安装包资源交付，并在桌面发布态下默认从 bundle template provision 到可写的 app data 目录
   - [x] 让用户在安装/首次启动时决定 companion knowledge-base 路径，而不是只使用默认 provision 路径；当前实现为：首次启动时弹出系统目录选择器，记住选择结果，并把 companion knowledge-base provision 到用户选定位置
   - [ ] 实现安装器中的 `pi` 检测与静默安装链路
   - [x] 调整 `pi` 交付优先级：优先评估并接入 bundled `pi`，把“启动时 fallback 安装”保留为兜底路径，而不是正式首选交付方式
-  - [x] 先把 bundled `pi` 的打包入口接进构建链：`desktop:build` 现在支持通过 `GOGO_DESKTOP_PI_BINARY` 把上游 `pi` 运行目录收进 bundle resources，运行时会优先使用它
+  - [x] 先把 bundled `pi` 的打包入口接进构建链：`desktop:build` 现在会优先使用当前平台默认的 bundled `pi` 路径，也支持通过 `GOGO_DESKTOP_PI_BINARY` 显式指定上游 `pi` 运行目录；若两者都不可用则直接 fail，避免产出未携带 `pi-runtime` 的安装包
   - [x] 已在 macOS 本地验证 bundled `pi` 运行目录可随桌面 bundle 分发：`pi-runtime/` 会带上 `package.json` 等旁件，OAuth `/login` 的终端拉起不再因缺少运行时文件而失败，诊断接口也已确认运行时优先使用 bundle 内的 `pi`
-  - [x] 已补齐 Windows 侧桌面 Pi 登录桥代码：桌面版现在会在 Windows 上通过 `cmd.exe` 拉起 bundled / system `pi`，并提示用户在终端中手动输入 `/login`；仍待 Windows 实机验收
+  - [x] 已补齐 Windows 侧桌面 Pi 登录桥代码：桌面版现在会在 Windows 上优先通过 PowerShell 拉起 bundled / system `pi`，并提示用户在终端中手动输入 `/login`；仍待 Windows 实机验收
+    - [x] 修复 Windows 开发态 OAuth 登录兜底仍是 macOS-only 的问题：当 Python 后端无法连接 Tauri 桥时，现在会直接打开 PowerShell 并运行当前检测到的 `pi`；同时修复 Python 参数数组传给 `cmd.exe /K` 导致的“文件名、目录名或卷标语法不正确”，`cmd.exe` 仅保留为最终兜底
+    - [x] 修复 Windows 11 实机通过 Windows Terminal 拉起 OAuth 登录时把 PowerShell 命令体误解析为启动程序的问题：Rust 桌面桥与 Python 兜底现在都直接启动 `powershell.exe -NoExit ... -Command ...`，不再经由 `wt.exe` 二次解析命令行
   - [x] 在当前桌面运行时保留 `pi` 检测与启动前安装链路作为 fallback：当未检测到 bundled/system `pi` 时，应用启动时优先展示安装引导，并在后台把 `pi` 托管到 app data 下的 `pi-runtime/`
   - [x] 将 `pi` 安装状态接入设置与诊断：展示命令来源、托管路径、npm 可用性、安装中状态与本地安装日志路径
   - [ ] 为 Windows 准备并验收可随包分发的 bundled `pi` 运行目录，确认 `pi.exe` 及其同目录运行时文件都能随包工作，而不是只复制单个可执行文件
+    - [x] 修复 Windows 实机问题：安装包启动应用时会额外弹出一个终端窗口持续显示 FastAPI 后端日志；当前已改为 Windows 发布态隐藏后端控制台，并把后端输出落盘到 app data 下的 `logs/backend.log`
   - [ ] 为 Windows / macOS 分别准备并验收可随包分发的 `pi` 运行目录产物，确认 OAuth `/login`、RPC 与 extension 链路在 bundled 形态下正常；当前 macOS 本地 bundle 已验证，Windows 与跨平台最终验收仍待完成
+    - [x] 修复 Windows 实机问题：在配置 Pi 模型并尝试打开 Pi CLI 时，终端报错 `'\\\\?\\D:\\Program Files\\gogo-app\\' CMD 不支持将 UNC 路径作为当前目录。无法打开 pi agent。`；当前已在 Windows shell 桥中去除 `\\?\\` / `\\?\\UNC\\` verbatim 前缀，并统一用于 `cmd.exe` 与 `explorer` 入口，确保安装目录和空格路径可正常工作
   - [ ] macOS bundled `pi` 不可直接裸分发：需要作为 `gogo-app.app` 的内嵌运行时一起签名，并纳入整包 notarization 验收
   - [ ] 把当前启动前安装链路继续前移到真正的安装器/首次启动向导，做到 bundled `pi` 缺失时普通用户也无需等待应用启动后再补装
   - [x] 确保发布态应用能够正确定位 bundle 内的后端资源，并把默认 knowledge-base、session 与 Pi extension 等可写状态收口到 app data 目录
+    - [x] 修复 Windows NSIS 安装包启动只闪现命令行后立即退出的问题：根因是安装产物缺失 `app/` 前端资源与可执行的 bundled backend launcher；当前 `desktop:build` 会显式生成 Tauri bundle resource 清单，并在 Windows 下把 sidecar `gogo-backend.exe` 与 `backend-runtime/` 一起打包，应用启动时会先把 bundle 内的后端 runtime 物化到 app data 再拉起
+    - [x] 修复 Windows 安装版闪退缺少主进程日志的问题：Tauri 启动日志现在写入 `%TEMP%\gogo-app-desktop-startup.log`，已用临时安装目录验证发布态能走到 `setup: main window built`
+    - [x] 修复 Windows 安装版首次欢迎页关闭后再次启动闪退的问题：启动器现在会复用 app data 下已完整物化的 `bundled-resources/backend-runtime`，避免第二次启动继续覆盖 `.pyd` 等运行库文件导致 Tauri setup hook panic
+    - [x] 修复 Windows 发布态启动时额外出现终端窗口的问题：release 版 Tauri 主程序已声明为 Windows GUI subsystem；后端子进程继续使用 `CREATE_NO_WINDOW`，关掉终端不应再连带关闭桌面端
+    - [x] 修复 Windows app data 下 `logs/backend.log` 无法打开时启动闪退的问题：后端日志文件不可写时不再让 setup hook 失败，而是丢弃后端 stdout/stderr 并继续启动
   - [x] 收敛桌面资源 staging 目录：当前构建链与 `.gitignore` 已统一以 `src-tauri/desktop-runtime-staging/` 作为唯一有效资源输入，旧 `desktop-runtime/` 只保留为历史遗留目录
+    - [x] 修复 Windows `desktop:dev` 被发布态 staging 资源阻塞的问题：基础 `src-tauri/tauri.conf.json` 不再静态声明 `desktop-runtime-staging/backend` 等 `bundle.resources`，资源清单改为仅由 `desktop:build` 生成临时 Tauri 配置写入
   - [ ] 明确并接入 Windows 代码签名
   - [ ] 明确并接入 macOS Developer ID 签名与 notarization
 
 #### 4.3 Phase 3: 首次启动引导、模型配置与本地诊断
 
-- [ ] 补齐首次启动引导与安装后诊断
-  - [ ] 发布时序说明：4.3 不阻塞“内部打包验证”，但应阻塞“面向普通用户的候选发布包”
-  - [ ] 实现首次启动向导，按既定主路径串起 `pi` 安装/检测、模型配置、进入 companion knowledge-base 和 demo 触发
-  - [ ] 把“API key 可跳过，但仍可浏览 Wiki”做成清晰分支，而不是报错中断
-  - [ ] 实现模型配置入口，覆盖 API key 型 provider 与首发承诺范围内的 Pi OAuth
-  - [ ] 在应用内增加环境自检：knowledge-base 目录结构、`pi` 是否可执行、后端是否启动成功、模型配置是否完整
-  - [ ] 为常见失败场景提供面向普通用户的错误提示与下一步建议，而不是只暴露底层报错
-  - [ ] 提供“查看诊断信息 / 打开日志目录 / 导出诊断摘要”等入口，且默认只做本地保存
+- [x] 补齐首次启动引导与安装后诊断
+  - [x] 发布时序说明：4.3 不阻塞“内部打包验证”，但应阻塞“面向普通用户的候选发布包”
+  - [x] 实现首次启动向导，按既定主路径串起 `pi` 安装/检测、模型配置、进入 companion knowledge-base 和完整工作流入口
+  - [x] 把“API key 可跳过，但仍可浏览 Wiki”做成清晰分支，而不是报错中断
+  - [x] 实现模型配置入口，覆盖 API key 型 provider 与首发承诺范围内的 Pi OAuth
+  - [x] 在应用内增加环境自检：knowledge-base 目录结构、`pi` 是否可执行、后端是否启动成功、模型配置是否完整
+  - [x] 为常见失败场景提供面向普通用户的错误提示与下一步建议，而不是只暴露底层报错
+  - [x] 提供“查看诊断信息 / 打开日志目录 / 导出诊断摘要”等入口，且默认只做本地保存
 
 #### 4.4 Phase 4: 首发能力闭环
 
-- [ ] 围绕首发最低成功标准打通完整任务链
-  - [ ] 上传文件
-  - [ ] ingest
-  - [ ] 聊天
-  - [ ] 写回 Wiki
-  - [ ] 验证 companion knowledge-base 和用户自有 knowledge-base 两条路径都可跑通
-  - [ ] 验证“已配置模型”和“未配置模型但先浏览 Wiki”两种首屏路径都成立
+- [x] 围绕首发最低成功标准打通完整任务链
+  - [x] 上传文件
+  - [x] ingest
+  - [x] 聊天
+  - [x] 写回 Wiki
+  - [x] 验证 companion knowledge-base 和用户自有 knowledge-base 两条路径都可跑通
+  - [x] 验证“已配置模型”和“未配置模型但先浏览 Wiki”两种首屏路径都成立
+  - [x] 补齐首发前的最小安全约束，降低 `pi` 直接执行 bash / 写文件时的宿主机风险
+    - [x] 设计并落地用户可见的安全模式总开关：
+      - [x] `只读模式`：允许聊天、读文件、搜索，禁止 `write` / `edit` / `bash`
+      - [x] `允许写文件`：允许 `write` / `edit`，但禁止 `bash`
+      - [x] `允许执行命令`：允许 `write` / `edit` / `bash`，但仍默认阻断明显危险命令
+    - [x] 明确并固化默认工作区边界：
+      - [x] 默认以当前 knowledge-base 目录作为 `pi` workdir
+      - [x] 当前首发版本仅信任当前 knowledge-base，不允许 agent 自由漂移到任意目录
+      - [x] 在 diagnostics / 设置中显示当前受信任工作区范围，方便用户理解边界
+    - [x] 基于 `pi` extension 机制实现一层 managed security extension，拦截 `tool_call`
+      - [x] 优先覆盖 `bash`
+      - [x] 覆盖 `write` / `edit`
+      - [x] extension 由 `gogo-app` 托管生成与更新，不要求用户手工维护
+    - [x] 为明显危险命令建立默认阻断规则
+      - [x] 直接阻断高风险模式，例如 `sudo`、`rm -rf /`、`rm -rf ~`、磁盘格式化、系统服务命令等
+      - [x] 用可维护规则表统一管理，而不是把判断散落在 UI / 后端多处
+      - [x] 在被阻断时向用户明确说明“为什么被阻断”
+    - [x] 增加 bash / 写文件操作的完整日志与可见提示
+      - [x] 记录时间、session、tool、目标路径/命令、判定结果（allow / block）
+      - [x] 在聊天工作日志 / trace 中明确显示“安全限制已阻止：...”
+      - [x] 日志只保存在本地，不自动上传
+    - [x] 为首发建立一份“最小安全边界”文档
+      - [x] 明确当前不是强沙箱，不承诺容器级隔离
+      - [x] 明确当前默认限制与用户可调整项
+      - [x] 把“容器化执行 / 更强沙箱”列为后续增强项，而不是首发阻塞项
+    - 结论：当前版本已经具备首发可用的“最小安全约束”闭环。Pi RPC 进程会自动加载 gogo-app 托管的 `managed-security.ts`；默认安全模式为“允许写文件”，允许在当前 knowledge-base 内执行 `write/edit`，默认禁止 `bash`，并持续阻断 `sudo`、删根目录、磁盘格式化等明显危险命令。所有 `bash/write/edit` 的 allow/block 决策都会写入本地安全日志，并在聊天工作台中提供内联审批浮层，支持对当前工具调用直接批准或禁止，并把禁止理由继续 steer 给 Pi；当前模式、受信任工作区、日志路径与最近审计记录也可在应用内查看。
 
 #### 4.5 Phase 5: 跨平台兼容与干净机器验收
 
@@ -431,6 +505,19 @@
 
 | 日期 | 变更 |
 |------|------|
+| 2026-04-24 | 修复 Windows 10/11 启动时多出终端窗口且关终端会关闭桌面端的问题：release 版 Tauri 主程序现在使用 Windows GUI subsystem；同时后端日志打开失败不再导致 setup panic，`backend.log` 不可写时会降级为 null stdout/stderr |
+| 2026-04-24 | 修复 Windows 11 OAuth 登录终端报错 `0x80070002`：另一台设备上 Windows Terminal 会把 `& 'C:\Program Files\gogo-app\pi-runtime\pi.exe'` 这段 PowerShell 命令体误当成要启动的程序，导致“系统找不到指定的文件”。当前 Rust 桌面桥与 Python 兜底均改为直接启动 PowerShell，`cmd.exe` 只作最终兜底 |
+| 2026-04-24 | 修复 Windows 安装版首次启动后再次打开闪退：`%TEMP%\gogo-app-desktop-startup.log` 显示第二次启动在复制 `backend-runtime/_internal/httptools/parser/*.pyd` 到 app data 时失败并触发 setup panic；当前桌面启动器会先检查 app data 下已物化的 `bundled-resources/backend-runtime` 是否完整，完整则直接复用，只有半成品目录才清理后重建，避免关闭欢迎页后再次打开只闪黑框 |
+| 2026-04-24 | 修复 Windows 安装后 `gogo-app` 只闪一下的问题排查链路：确认生成的 setup.exe payload 可正常解包，发现历史安装路径 `D:\Program Files\gogo-app` 为空且 NSIS 会恢复上一次安装位置；当前已将 NSIS `installMode` 改为 `both`，让安装器明确区分当前用户/所有用户安装，并把 Tauri 主进程启动日志改写到 `%TEMP%\gogo-app-desktop-startup.log`。重新 `desktop:build` 后，临时安装目录冒烟通过，日志出现 `setup: main window built` |
+| 2026-04-24 | 修复 Windows 开发态 OAuth 登录提示“当前开发态兜底登录只实现了 macOS”：`POST /api/settings/pi-login` 在 Tauri 桥不可用时，Python 后端现在会打开 PowerShell 并运行当前检测到的 `pi`，同时保留路径前缀清洗和 managed provider extension 参数；后续发现 Python 参数数组会触发 `cmd.exe` 报“文件名、目录名或卷标语法不正确”，且 `cmd.exe` 下 Pi CLI 菜单残影明显，已将 Python 兜底与 Rust 桌面桥都改为优先 PowerShell，`cmd.exe` 仅作最终兜底 |
+| 2026-04-24 | 修复 Windows `npm run desktop:dev` 被发布态 staging 资源校验阻塞的问题：基础 `src-tauri/tauri.conf.json` 不再静态声明 `desktop-runtime-staging/backend` / `pi` resources，发布包资源清单继续由 `desktop:build` 生成临时 Tauri 配置写入；同步更新桌面打包指南与回归记录 |
+| 2026-04-24 | 新增 `docs/workspace-and-agent-runtime-refactor-plan.md`，记录两条下一阶段结构性重构：内容工作区抽象，以及“ACP 外接 agent + bundled Pi fallback”的 Agent runtime 抽象；同步补充 `docs/index.md` 与 `TASKS.md` |
+| 2026-04-23 | 将一组新的工作台交互改动加入任务列表：模式切换不自动弹出 Chat/Wiki、三类浮窗支持点外收起、Chat 底部工具栏遮挡与命令菜单样式优化、Wiki 可见 Inbox、Wiki 支持新建 `.md` 文件 |
+| 2026-04-18 | 修复 Windows 安装版启动闪退：定位到 NSIS 安装产物缺失 `app/` 前端资源与可执行的 bundled backend launcher，导致已安装应用只弹出命令行窗口后立即退出；当前已把 `desktop:build` 改为显式生成 Tauri resource 清单，随包分发 `app/`、`backend-runtime/` 与 Windows sidecar `gogo-backend.exe`，并在启动时把 bundle 内后端 runtime 物化到 app data 后再启动，已在本机安装版验证可正常打开 `gogo-app` 主窗口 |
+| 2026-04-18 | 修复两条 Windows 打包态实机问题：1）Tauri 桌面版在 Windows 下启动 FastAPI 后端时不再继承控制台，而是隐藏子进程窗口并把日志落盘到 app data 下的 `logs/backend.log`；2）Pi 登录桥在调用 `cmd.exe` / `explorer` 前会清洗 `\\?\\` 与 `\\?\\UNC\\` 路径前缀，修复安装目录位于 `Program Files` 时无法打开 `pi` 终端的问题 |
+| 2026-04-18 | 扩展仓库 `.gitignore` 的 Windows / 本地环境忽略规则：补充 `.vs/`、`Thumbs.db`、`Desktop.ini`、`*.lnk`、`*.stackdump`、`pip-wheel-metadata/` 等本地噪音文件，降低 macOS / Windows 跨平台协作时的误提交风险 |
+| 2026-04-18 | 补充两条 Windows 实机问题记录：1）安装包启动应用时会额外弹出终端并持续显示 FastAPI 后端日志，和 macOS 当前体验不一致；2）配置 Pi 模型时终端报错 `'\\\\?\\D:\\Program Files\\gogo-app\\' CMD 不支持将 UNC 路径作为当前目录。无法打开 pi agent。`，需修复 Windows 下安装目录路径与 Pi 登录桥兼容性 |
+| 2026-04-18 | Windows 桌面构建链路推进：补齐 `src-tauri/icons/icon.ico`，确认本机已装好 Rust / WebView2 / VS 2019 Build Tools，`desktop:build` 已能产出 `desktop-runtime-staging/backend/gogo-backend.exe`；同时修复 `scripts/desktop-build.mjs` 在 Windows 上直接 `spawn` 本地 `tauri.cmd` 导致的 `spawn EINVAL`，并将 Windows 首发安装介质从 `msi` 调整为 `NSIS setup.exe`。随后通过预置 NSIS 依赖缓存解决下载超时，已在本机成功产出 `src-tauri/target/release/bundle/nsis/gogo-app_0.1.0_x64-setup.exe` |
 | 2026-04-16 | 完成一轮会话切换 / 启动恢复卡顿排查与性能优化：新增 `docs/session-performance-optimization-log.md`，并落地 app-turns 历史快路径、后台刷新 session detail、历史消息分批渲染 |
 | 2026-04-16 | 完成 Tauri 第一阶段迁移，并清理旧 Electron 文档与过期任务说明：新增 `src-tauri/`、Tauri 后端启动器、桌面 bridge 与目录选择能力；同步 README / TASKS / docs 索引 |
 | 2026-04-14 | 新增待排查问题：长回复可能被提前中断；`PiRpcClient.abort()` 与流式读取并发时出现 `read() called while another coroutine is already waiting for incoming data` |

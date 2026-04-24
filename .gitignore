@@ -2,12 +2,20 @@
 .DS_Store
 .idea/
 .vscode/
+.vs/
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.stackdump
 
 # Local environment
 .env
 .env.local
 .env.*.local
 .python-version
+.local/
 .venv/
 venv/
 
@@ -17,6 +25,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Vendored frontend assets
+app/frontend/assets/vendor/katex/fonts/*.ttf
 
 # Python
 __pycache__/
@@ -28,6 +39,7 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+pip-wheel-metadata/
 
 # App runtime state
 .gogo/

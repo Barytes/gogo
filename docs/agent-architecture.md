@@ -4,7 +4,7 @@
 >
 > 上层产品/应用架构见 [gogo-app-architecture.md](gogo-app-architecture.md)。
 
-**最后更新**: 2026-04-15
+**最后更新**: 2026-04-18
 
 ---
 
@@ -16,6 +16,7 @@
 - legacy 单次聊天：`agent_service.py` 走 `pi --mode rpc --no-session`
 - Pi RPC 通讯：统一由 `pi_rpc_client.py` 负责
 - Provider 扩展：由 `config.py` 生成托管 extension，并在每次 RPC 启动时通过 `--extension` 注入
+- 安全扩展：由 `security_service.py` 生成托管 `managed-security.ts`，在每次 RPC 启动时和 Provider extension 一起注入
 
 换句话说，`gogo-app` 现在的 Agent 层更像：
 
@@ -57,7 +58,7 @@ workbench.js / chat.js
   -> main.py
   -> config.py / session_manager.py
   -> pi_rpc_client.py
-  -> pi --mode rpc --extension .gogo/pi-extensions/managed-providers.ts
+  -> pi --mode rpc --extension .gogo/pi-extensions/managed-providers.ts --extension .gogo/pi-extensions/managed-security.ts
 ```
 
 ---
@@ -114,6 +115,15 @@ workbench.js / chat.js
 - 写入 Pi `auth.json`
 - 生成 `.gogo/pi-extensions/managed-providers.ts`
 - 返回 settings / diagnostics 所需配置数据
+
+### `app/backend/security_service.py`
+
+职责：
+
+- 管理 `pi_security` 应用设置
+- 生成 `.gogo/pi-extensions/managed-security.ts`
+- 定义安全模式、受信任工作区和危险命令规则
+- 返回 diagnostics 所需的安全边界和本地审计日志信息
 
 ### `app/backend/main.py`
 
@@ -240,6 +250,7 @@ workbench.js / chat.js
 - 通过 `POST /api/settings/pi-login`
 - 接到桌面壳桥接层
 - 拉起交互式 Pi CLI，并触发原生 `/login`
+- 若开发态桌面桥不可用，Python 后端会在 macOS / Windows 上直接打开本机终端作为兜底登录入口；Windows 下优先直接启动 PowerShell，避免 Windows Terminal 二次解析命令行
 
 ---
 
@@ -258,6 +269,24 @@ workbench.js / chat.js
 
 - 运行时模型切换
 - 思考水平切换
+- 安全模式切换（只读 / 允许写文件 / 允许执行命令）
+
+## 10. 首发前最小安全边界
+
+当前所有 `PiRpcClient` 启动参数都会自动追加 gogo-app 托管的 `managed-security.ts`。
+
+这层最小安全约束当前负责：
+
+- 默认把 `bash` 禁用在“只读模式”和“允许写文件”模式下
+- 只允许 `write/edit` 写入当前 knowledge-base 目录
+- 阻断明显危险命令，例如 `sudo`、`rm -rf /`、`rm -rf ~`、`mkfs`、`dd of=/dev/*`
+- 把 `bash/write/edit` 的 allow / block 决策写入本地审计日志，并通过 diagnostics 暴露给前端
+
+当前明确不是强沙箱：
+
+- 不承诺容器级隔离
+- 已接入 RPC extension UI 子协议，用于当前 `tool_call` 的 inline 安全确认
+- “允许执行命令”模式仍以默认阻断明显危险命令为主，而不是把所有宿主机能力都无条件放开
 - diagnostics 展示
 - 桌面版演进所需的运行时信息基础
 
@@ -273,10 +302,10 @@ workbench.js / chat.js
 - 按知识库隔离的 session 目录
 - Model Provider profile + 托管 extension
 - settings / diagnostics / inbox / runtime options API
+- 桌面版 Pi CLI 登录桥与 macOS / Windows 开发态直连兜底
 
 未实现：
 
-- 真正的桌面版 Pi CLI 登录桥
 - 桌面版 Wiki Markdown 编辑
 - 桌面版 slash 命令桥接
 
