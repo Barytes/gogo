@@ -1,26 +1,169 @@
-# gogo
+# 🐶 gogo
 
-一个自带 AI Agent 的 [llm-wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) 风格本地知识库桌面应用原型。开箱即用，不需要额外安装任何Coding Agent或配置任何插件，即可直接与 AI 研究助手对话，在本地管理和积累个人知识。
+自带一个 [Pi Agent](https://github.com/badlogic/pi-mono) 的 [llm-wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) 风格本地知识库桌面应用原型。开箱即用，不需要额外安装任何Coding Agent或配置任何插件，即可直接与 AI 研究助手对话，在本地管理和积累个人知识。
+
+![gogo](docs/assets/gogo_demo_video.gif)
+
+我正在使用 llm-wiki 作为自己的第二大脑，也非常喜欢这种组织知识的方式。但在日常使用中，我发现 llm-wiki 的工作流有些麻烦：需要同时打开 Obsidian 和 Codex，在两个工具之间来回切换。对我来说尤其明显，因为我通常只有一个屏幕。另一方面，我也很难把 llm-wiki 这种模式安利给身边没有 IT 背景的朋友，因为他们需要下载安装 Coding Agent、配置运行环境和 LLM 模型。这个门槛足以让很多人望而却步。
+
+所以我做了 gogo。现在，我把 gogo 作为自己日常使用 llm-wiki 的入口。虽然它远远没有到达完美水准，但是我觉得它已经能够满足我的需求。它把本地知识库、AI 研究助手和 llm-wiki 工作流放在同一个应用里。如果你也有类似的痛点，希望它也能帮到你。
+
+## 开始使用 gogo
+
+gogo 提供了 Windows x64 和 MacOS（Apple Silicon）版本的安装包。你可以在 [Github Release](https://github.com/Barytes/gogo/releases) 下载对应的安装包。
+
+安装后，首次启动会出现一个欢迎页面。你首先需要配置自己的 LLM 模型。gogo 底层是一个 [Pi Agent](https://github.com/badlogic/pi-mono) ，它支持通过 API Key 和 OAuth 两种方式配置。如果你是通过购买 API 或者订阅 Coding Plan 的形式来使用 LLM，你可以在 API Key 选项中填入你的 API Key、BaseURL 等信息，也可以直接将模型提供商为 OpenClaw 提供的 json 配置文件复制粘贴过来，gogo 可以自动识别。如果你订阅了模型提供商的高级计划，你可以在 OAuth 选项中打开终端 Pi，通过 `\login` 命令登陆支持的模型提供商。目前仅支持 Anthropic (Claude Pro/Max)、GitHub Copilot、Google Cloud Code Assist (Gemini CLI)、Antigravity、ChatGPT Plus/Pro (Codex Subscription)。
+
+配置好 LLM 模型后，你需要选择知识库的位置。如果你没有使用 llm-wiki 类的知识库，gogo 会在你选择的路径中为你创建一个示例知识库（见[example-knowledge-base](https://github.com/Barytes/gogo/tree/main/example-knowledge-base)）。如果你已经在使用 llm-wiki 类的知识库（包含raw, wiki目录），你可以选择你自己的知识库路径。
+
+### 1. llm-wiki 的工作流
+如果你不熟悉 llm-wiki，你可以阅读这篇文章：[llm-wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)。llm-wiki 的核心理念是把一次性检索，变成持续维护的知识编译，从而产生信息复利。llm-wiki 的工作流可以概括为三步：1）**Ingest**：把新资料放进 raw 层，由 LLM 读取并在 wiki 层建立新的 wiki 页面，并跟已有的 wiki 页面关联；2）**Query**：回答时优先从 wiki 检索与综合信息，必要时再回 raw 验证；3）**lint**：清理 wiki 页面，检查冲突、过时内容、孤儿页和缺失链接。
+
+
+
+### 2. Learn the two main views: Wiki and Chat
+
+应用主要围绕两个视图展开：
+
+- `Wiki`：浏览和编辑本地知识库内容
+- `Chat`：和内置 AI agent 对话
+
+一个很自然的第一步是：先在 `Wiki` 里打开一个页面，再切到 `Chat`，让 agent 帮你解释、总结或扩展当前内容。
+
+### 3. Understand the knowledge-base layout
+
+默认知识库是一个基于文件夹的工作区，最重要的几个目录是：
+
+- `wiki/`：整理后的页面、总结和可复用笔记
+- `raw/`：原始资料
+- `inbox/`：新文件的临时入口
+- `skills/`：给 agent 使用的小型工作流能力
+
+推荐的基本流程通常是：新资料先进入 `inbox/`，原始内容沉淀到 `raw/`，整理后的知识写入 `wiki/`。
+
+### 4. Try one complete loop
+
+第一次使用时，可以先走一遍这个最小闭环：
+
+1. 在 `wiki/` 中打开一个页面。
+2. 在 `Chat` 里围绕这个页面提一个问题。
+3. 上传一个文件到 `inbox/`。
+4. 让 agent 帮你把新材料整理成更清晰的 wiki 页面或总结。
+
+这样你就能很快感受到 gogo 的核心设计：文件始终是本地可见的，而 agent 负责帮助你阅读、整理和沉淀知识。
+
+### 5. Switch to your own knowledge base later
+
+当你理解了示例工作区之后，可以在设置面板里把 gogo 切换到你自己的本地知识库目录。
+
+如果你想继续了解架构或做更深入的定制，可以从 [Docs index](docs/index.md) 开始阅读。
+
+## 项目状态
+
+本项目当前处于 **维护模式（maintenance mode）**。
+
+它作为作品项目公开。由于个人的精力有限，我目前不再积极开发新功能，也不建议把这个仓库视为生产级软件或长期支持的桌面产品。
+
+这意味着：
+
+- 你可以下载 Windows / MacOS 安装包并运行使用
+- 你可以阅读代码、在本地运行，并把它作为参考实现。
+- 当前不保证最终用户可直接使用的 。
+- Final end-user Windows / macOS installers are not currently guaranteed or actively maintained.
+- 欢迎感兴趣的读者提交 issue、PR 或 fork 继续探索，尤其是把它作为参考实现或实验起点使用。
+- Contributions, issues, PRs, and forks are welcome, especially if you find the project useful as a reference or want to continue the experiment in your own direction.
+- 但本仓库目前仅按 best-effort 方式维护，我不计划主动推动新功能或长期支持。
+- However, this repository is maintained on a best-effort basis, and I do not currently plan to actively drive new features or long-term support.
+
+
+# 🐶 gogo
 
 A desktop app prototype for a local [llm-wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)-style knowledge base with a built-in AI agent. It is designed to be usable out of the box: you can talk to an AI research assistant and manage and grow your personal knowledge locally, without installing any additional coding agents or configuring plugins.
 
+I use llm-wiki as my second brain, and I really like this way of organizing personal knowledge. In daily use, though, I found the workflow a little cumbersome. I had to keep both Obsidian and Codex open and constantly switch between them, which was especially annoying because I usually work on a single screen. I also found it hard to recommend llm-wiki to non-technical friends, because it required them to install a coding agent, configure the environment, and set up an LLM model. That is a lot of friction before they can even try the idea.
 
-我正在使用 llm-wiki 作为自己的第二大脑，也非常喜欢这种组织知识的方式。
+So I built gogo. Today, I use gogo as my daily entry point for working with llm-wiki. Although it's not a perfect app, I find it good enough to meet my needs. It brings the local knowledge base, the AI research assistant, and the llm-wiki workflow into one app. If you have run into the same pain points, I hope it helps you too.
 
-但在日常使用中，我发现 llm-wiki 的工作流有些麻烦：需要同时打开 Obsidian 和 Codex，在两个工具之间来回切换。对我来说尤其明显，因为我通常只有一个屏幕。另一方面，我也很难把 llm-wiki 这种模式安利给身边没有 IT 背景的朋友，因为他们需要下载安装 Coding Agent、配置运行环境和 LLM 模型。这个门槛足以让很多人望而却步。
-
-所以我做了 gogo。
-
-现在，我把 gogo 作为自己日常使用 llm-wiki 的入口，并且我觉得它已经能够满足我的需求。它把本地知识库、AI 研究助手和 llm-wiki 工作流放在同一个应用里。如果你也有类似的痛点，希望它也能帮到你。
+## Getting Started
 
 
-I use llm-wiki as my second brain, and I really like this way of organizing personal knowledge.
+If you have already completed the quick start above, this short walkthrough is the easiest way to understand how gogo is meant to be used.
 
-In daily use, though, I found the workflow a little cumbersome. I had to keep both Obsidian and Codex open and constantly switch between them, which was especially annoying because I usually work on a single screen. I also found it hard to recommend llm-wiki to non-technical friends, because it required them to install a coding agent, configure the environment, and set up an LLM model. That is a lot of friction before they can even try the idea.
+### 1. Start with the bundled example knowledge base
 
-So I built gogo.
+By default, gogo opens `./example-knowledge-base`, which is a small starter workspace included in this repository.
 
-Today, I use gogo as my daily entry point for working with llm-wiki, and I find it good enough to meet my needs. It brings the local knowledge base, the AI research assistant, and the llm-wiki workflow into one app. If you have run into the same pain points, I hope it helps you too.
+默认情况下，gogo 会连接到仓库自带的 `./example-knowledge-base`。这是一个最适合第一次上手的示例知识库。
+
+You do not need to create your own knowledge base first. Just launch the app and explore the bundled one.
+
+第一次体验时，不需要先准备自己的知识库。直接启动应用，先浏览这个示例目录即可。
+
+### 2. Learn the two main views: Wiki and Chat
+
+The app is centered around two views:
+
+应用主要围绕两个视图展开：
+
+- `Wiki`: browse and edit the local knowledge base
+- `Chat`: talk to the built-in AI agent
+
+- `Wiki`：浏览和编辑本地知识库内容
+- `Chat`：和内置 AI agent 对话
+
+A good first step is to open a page in `Wiki`, then switch to `Chat` and ask the agent to explain, summarize, or extend what you are reading.
+
+一个很自然的第一步是：先在 `Wiki` 里打开一个页面，再切到 `Chat`，让 agent 帮你解释、总结或扩展当前内容。
+
+### 3. Understand the knowledge-base layout
+
+The default workspace is file-based. The main folders are:
+
+默认知识库是一个基于文件夹的工作区，最重要的几个目录是：
+
+- `wiki/`: maintained notes and reusable pages
+- `raw/`: raw source material
+- `inbox/`: temporary drop zone for new files
+- `skills/`: small workflow prompts / capabilities for the agent
+
+- `wiki/`：整理后的页面、总结和可复用笔记
+- `raw/`：原始资料
+- `inbox/`：新文件的临时入口
+- `skills/`：给 agent 使用的小型工作流能力
+
+The intended flow is usually: put new material into `inbox/`, preserve sources in `raw/`, and keep refined knowledge in `wiki/`.
+
+推荐的基本流程通常是：新资料先进入 `inbox/`，原始内容沉淀到 `raw/`，整理后的知识写入 `wiki/`。
+
+### 4. Try one complete loop
+
+A simple first-run loop is:
+
+第一次使用时，可以先走一遍这个最小闭环：
+
+1. Open a page from `wiki/`.
+2. Ask a question about it in `Chat`.
+3. Upload a file into `inbox/`.
+4. Ask the agent to help turn the new material into a cleaner wiki page or summary.
+
+1. 在 `wiki/` 中打开一个页面。
+2. 在 `Chat` 里围绕这个页面提一个问题。
+3. 上传一个文件到 `inbox/`。
+4. 让 agent 帮你把新材料整理成更清晰的 wiki 页面或总结。
+
+This gives you the basic feeling of gogo: local files stay visible, while the agent helps you read, transform, and organize them.
+
+这样你就能很快感受到 gogo 的核心设计：文件始终是本地可见的，而 agent 负责帮助你阅读、整理和沉淀知识。
+
+### 5. Switch to your own knowledge base later
+
+Once the example workspace makes sense, you can open the settings panel and point gogo at another local knowledge-base directory.
+
+当你理解了示例工作区之后，可以在设置面板里把 gogo 切换到你自己的本地知识库目录。
+
+If you want to understand the architecture or customize the setup further, start from [Docs index](docs/index.md).
+
+如果你想继续了解架构或做更深入的定制，可以从 [Docs index](docs/index.md) 开始阅读。
 
 
 ## 项目状态 / Project Status
@@ -60,10 +203,6 @@ What this means:
 - Switch model provider settings and thinking levels.
 - 上传文件到 `inbox/`，供后续处理。
 - Upload files into `inbox/` for later processing.
-- 从源码运行 FastAPI Web app。
-- Run as a FastAPI web app from source.
-- 在 Tauri 桌面壳中进行本地桌面端实验。
-- Run inside a Tauri desktop shell for local desktop experimentation.
 
 ## 设计原则 / Principles
 
@@ -81,25 +220,6 @@ What this means:
 - When code is not yet ideally decomposed, docs should help humans and AI agents find the right entry points.
 - **诚实地做原型 / Prototype honestly** — gogo 是一个探索性项目。它的价值在于工作流、集成经验和设计取舍，而不是伪装成成熟生产应用。
 - gogo is an exploratory project. Its value is in the workflow, integration lessons, and design tradeoffs, not in pretending to be a polished production app.
-
-## 截图 / Demo / Screenshots
-
-公开作品快照前，建议补充截图或一段短 demo。
-
-Screenshots or a short demo should be added before a public portfolio snapshot.
-
-建议截图：
-
-Suggested captures:
-
-- 主工作台
-- Main workspace
-- Wiki / Raw 浏览
-- Wiki / Raw browsing
-- 带 reasoning history 的 Chat 会话
-- Chat session with reasoning history
-- Settings / diagnostics 或桌面端 onboarding
-- Settings / diagnostics or desktop onboarding
 
 ## 技术栈 / Tech Stack
 
@@ -256,31 +376,6 @@ gogo-app/
 - There is not yet a complete public CI, release, or support process.
 - 公开作品快照前，还建议补充截图、license、code index docs 和简洁的 concepts 文档。
 - Screenshots, license choice, code index docs, and a concise concepts document should be added before a polished public snapshot.
-
-## 项目为什么存在 / Why This Project Exists
-
-gogo 用来探索：一个本地文件型知识库，如何变成 AI-assisted research 的工作台。
-
-gogo was built to explore how a local file-based knowledge base can become a workspace for AI-assisted research.
-
-项目组合了：
-
-The project combines:
-
-- 可见的 knowledge-base layout：`wiki/`、`raw/`、`inbox/`、`skills/`
-- A visible knowledge-base layout: `wiki/`, `raw/`, `inbox/`, `skills/`
-- 用于阅读和编辑本地知识的 browser-like workspace
-- A browser-like workspace for reading and editing local knowledge
-- 用于研究辅助的 chat / session layer
-- A chat/session layer for research assistance
-- 作为 agent runtime bridge 的 Pi RPC
-- Pi RPC as an agent runtime bridge
-- 用于桌面端实验的 Tauri shell
-- A Tauri shell for desktop experimentation
-
-它也是一次在真实项目规模下使用 AI-generated code 的记录。下一步不是假装代码库完美，而是把它的原则、边界和导航写清楚，让人类和 coding agents 都能理解它。
-
-It is also a record of working with AI-generated code at meaningful project scale. The next step is not to pretend the codebase is perfect, but to make its principles, boundaries, and navigation clear enough that both humans and coding agents can understand it.
 
 ## License
 
