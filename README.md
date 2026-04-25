@@ -1,187 +1,289 @@
 # gogo
 
-本地知识库工作台：浏览 `Wiki / Raw`，并通过 Pi RPC 驱动聊天式研究助手。
+一个自带 AI Agent 的 [llm-wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) 风格本地知识库桌面应用原型。开箱即用，不需要额外安装任何Coding Agent或配置任何插件，即可直接与 AI 研究助手对话，在本地管理和积累个人知识。
 
-## 当前发布边界
+A desktop app prototype for a local [llm-wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)-style knowledge base with a built-in AI agent. It is designed to be usable out of the box: you can talk to an AI research assistant and manage and grow your personal knowledge locally, without installing any additional coding agents or configuring plugins.
 
-截至 **2026-04-17**，当前仓库应理解为：
 
-- 对外目标：做成普通用户可直接安装的 Windows / macOS 桌面应用
-- 正式产品形态：桌面版；Web 版不作为正式对外产品
-- 已支持：从源码运行的 Web 版
-- 已支持：从源码运行的 Tauri 桌面开发版
-- 尚未完成：面向最终用户稳定分发并验收完成的 Windows / macOS 安装包
+我正在使用 llm-wiki 作为自己的第二大脑，也非常喜欢这种组织知识的方式。
 
-也就是说，方向已经明确是“普通用户可直接安装”，当前也已经打通了 Tauri 发布态资源与 macOS `.app/.dmg` 基础构建；但现实状态仍然是“开发者可运行的桌面版先行，正式安装包尚未验收完成”。
+但在日常使用中，我发现 llm-wiki 的工作流有些麻烦：需要同时打开 Obsidian 和 Codex，在两个工具之间来回切换。对我来说尤其明显，因为我通常只有一个屏幕。另一方面，我也很难把 llm-wiki 这种模式安利给身边没有 IT 背景的朋友，因为他们需要下载安装 Coding Agent、配置运行环境和 LLM 模型。这个门槛足以让很多人望而却步。
 
-如果你需要对外介绍当前状态，请优先参考：
+所以我做了 gogo。
 
-- [docs/release-target-and-boundaries.md](docs/release-target-and-boundaries.md)
+现在，我把 gogo 作为自己日常使用 llm-wiki 的入口，并且我觉得它已经能够满足我的需求。它把本地知识库、AI 研究助手和 llm-wiki 工作流放在同一个应用里。如果你也有类似的痛点，希望它也能帮到你。
 
-## 当前能力
 
-- 单页工作台：`Wiki` / `Chat` 双布局
-- 连接并切换外部 knowledge-base
-- 多会话聊天与“思考过程”恢复
-- 模型 / 思考水平切换
-- 上传文件到 `inbox/` 并驱动 ingest
-- 设置面板中的 Provider 与 diagnostics
-- Tauri 桌面壳第一期实现
+I use llm-wiki as my second brain, and I really like this way of organizing personal knowledge.
 
-## Web 模式启动
+In daily use, though, I found the workflow a little cumbersome. I had to keep both Obsidian and Codex open and constantly switch between them, which was especially annoying because I usually work on a single screen. I also found it hard to recommend llm-wiki to non-technical friends, because it required them to install a coding agent, configure the environment, and set up an LLM model. That is a lot of friction before they can even try the idea.
 
-当前适用对象：
+So I built gogo.
 
-- 开发者
-- 愿意自己准备本地环境的技术用户
+Today, I use gogo as my daily entry point for working with llm-wiki, and I find it good enough to meet my needs. It brings the local knowledge base, the AI research assistant, and the llm-wiki workflow into one app. If you have run into the same pain points, I hope it helps you too.
 
-说明：
 
-- Web 版当前主要用于开发、调试和技术验证
-- 它不是面向普通用户的最终交付形态
+## 项目状态 / Project Status
 
-1. 从 `.env.example` 创建 `.env`
-2. 配置 `KNOWLEDGE_BASE_DIR`
-3. 安装 Python 依赖
+本项目当前处于 **maintenance mode**。
+
+This project is in **maintenance mode**.
+
+它作为作品项目公开。由于个人的精力有限，我目前不再积极开发新功能，也不建议把这个仓库视为生产级软件或长期支持的桌面产品。
+
+It is published as a portfolio project. Due to limited personal bandwidth, I am not actively developing new features, and this repository should not be treated as production-ready software or a long-term supported desktop product.
+
+这意味着：
+
+What this means:
+
+- 你可以阅读代码、在本地运行，并把它作为参考实现。
+- You can read the code, run it locally, and use it as a reference.
+- 当前不保证最终用户可直接使用的 Windows / macOS 安装包。
+- Final end-user Windows / macOS installers are not currently guaranteed or actively maintained.
+- 欢迎感兴趣的读者提交 issue、PR 或 fork 继续探索，尤其是把它作为参考实现或实验起点使用。
+- Contributions, issues, PRs, and forks are welcome, especially if you find the project useful as a reference or want to continue the experiment in your own direction.
+- 但本仓库目前仅按 best-effort 方式维护，我不计划主动推动新功能或长期支持。
+- However, this repository is maintained on a best-effort basis, and I do not currently plan to actively drive new features or long-term support.
+
+## 当前能力 / What It Does
+
+- 浏览和编辑本地文件型知识库，包括 `wiki/`、`raw/`、`inbox/` 和 `skills/` 区域。
+- Browse and edit a local file-based knowledge base with `wiki/`, `raw/`, `inbox/`, and `skills/` areas.
+- 使用单页工作台，在 `Wiki` 和 `Chat` 视图之间切换。
+- Use a single-page workspace with `Wiki` and `Chat` views.
+- 连接并切换外部 knowledge-base 目录。
+- Connect to an external knowledge-base directory.
+- 运行多会话聊天流程，并恢复 reasoning / event history。
+- Run multi-session chat workflows with recoverable reasoning / event history.
+- 切换 model provider 设置和 thinking level。
+- Switch model provider settings and thinking levels.
+- 上传文件到 `inbox/`，供后续处理。
+- Upload files into `inbox/` for later processing.
+- 从源码运行 FastAPI Web app。
+- Run as a FastAPI web app from source.
+- 在 Tauri 桌面壳中进行本地桌面端实验。
+- Run inside a Tauri desktop shell for local desktop experimentation.
+
+## 设计原则 / Principles
+
+- **本地文件优先 / Local files first** — 知识应该保存在用户可以检查、版本管理、移动和编辑的文件夹与文件中，而不是锁在 app 内部。
+- Knowledge should live in folders and files the user can inspect, version, move, and edit outside the app.
+- **知识可迁移，不锁定 / Portable knowledge, no lock-in** — 停止使用 gogo 不应该让知识库变得不可读。
+- Stopping use of gogo should not make the knowledge base unreadable.
+- **默认适合 AI 阅读 / AI-readable by default** — knowledge-base 结构、`AGENTS.md`、文档和未来的代码索引，都应该帮助 coding agents 更少地“翻找上下文”。
+- The knowledge-base layout, `AGENTS.md`, docs, and future code indexes should help coding agents understand the project with less context-hunting.
+- **Agent 是协作者，不是所有者 / Agent as collaborator, not owner** — AI 可以帮助浏览、推理和写作，但用户拥有文件和工作流。
+- AI can help browse, reason, and write, but the user owns the files and the workflow.
+- **约定优先于隐藏配置 / Conventions over hidden configuration** — `wiki/`、`raw/`、`inbox/` 和 `skills/` 应该像普通目录一样容易理解，而不是隐藏 app state。
+- `wiki/`, `raw/`, `inbox/`, and `skills/` should be understandable as plain directories, not hidden app state.
+- **文档也是导航 / Documentation as navigation** — 当代码尚未拆分到理想状态时，文档应该帮助人类和 AI agents 找到正确入口。
+- When code is not yet ideally decomposed, docs should help humans and AI agents find the right entry points.
+- **诚实地做原型 / Prototype honestly** — gogo 是一个探索性项目。它的价值在于工作流、集成经验和设计取舍，而不是伪装成成熟生产应用。
+- gogo is an exploratory project. Its value is in the workflow, integration lessons, and design tradeoffs, not in pretending to be a polished production app.
+
+## 截图 / Demo / Screenshots
+
+公开作品快照前，建议补充截图或一段短 demo。
+
+Screenshots or a short demo should be added before a public portfolio snapshot.
+
+建议截图：
+
+Suggested captures:
+
+- 主工作台
+- Main workspace
+- Wiki / Raw 浏览
+- Wiki / Raw browsing
+- 带 reasoning history 的 Chat 会话
+- Chat session with reasoning history
+- Settings / diagnostics 或桌面端 onboarding
+- Settings / diagnostics or desktop onboarding
+
+## 技术栈 / Tech Stack
+
+- **后端 / Backend:** FastAPI, Python, uvicorn
+- **前端 / Frontend:** Plain HTML / CSS / JavaScript
+- **桌面壳 / Desktop shell:** Tauri v2, Rust
+- **Agent runtime:** Pi RPC integration
+- **知识库 / Knowledge base:** Local Markdown-oriented folders with `wiki/`, `raw/`, `inbox/`, and `skills/`
+- **Markdown / math rendering:** Marked, KaTeX
+
+## 快速启动：Web 模式 / Quick Start: Web Mode
+
+Web 模式是从源码查看和体验项目的最简单方式。
+
+Web mode is the simplest way to inspect the project from source.
+
+前置要求：
+
+Prerequisites:
+
+- Python 3.9+
+- `uv`
+- 如果你想体验 Pi integration 路径，需要 Node.js 22 或 24。
+- Node.js 22 or 24 if you want the Pi integration path.
+
+启动：
+
+Setup:
 
 ```bash
+cd gogo-app
+cp .env.example .env
 uv sync
-```
-
-4. 启动 FastAPI
-
-```bash
 uv run uvicorn app.backend.main:app --reload
 ```
 
-5. 打开：
+打开：
 
-- `http://127.0.0.1:8000/`
+Open:
+
+```text
+http://127.0.0.1:8000/
+```
 
 兼容入口：
 
-- `http://127.0.0.1:8000/chat`
-- `http://127.0.0.1:8000/wiki`
+Useful compatibility routes:
 
-## 桌面版状态
-
-当前仓库里的桌面实现已经切到 Tauri，旧 Electron 可执行代码与历史文档都已清理。
-
-当前这部分的定位是：
-
-- 对外目标所对应正式桌面版的前置落地阶段
-- 可供开发者和小范围内测运行与验证的桌面开发版
-- 不是已经完成最终用户分发的正式桌面安装包
-
-当前桌面链路仍依赖外部环境：
-
-- Node `22` 或 `24`
-- Rust 工具链
-- Python 运行时
-- 一个可用的 knowledge-base 目录
-- 若没有 bundled 或系统可用的 `pi`，当前桌面版会退回到启动界面的 fallback 安装；这条路径当前仍依赖本机可用的 `npm`
-
-如果你要运行桌面版，先准备：
-
-1. Node `22` 或 `24`
-2. Rust 工具链
-3. 平台原生桌面依赖
-
-然后安装 Node 依赖：
-
-```bash
-npm install
+```text
+http://127.0.0.1:8000/chat
+http://127.0.0.1:8000/wiki
 ```
 
-启动 Tauri 开发版：
+默认 `.env.example` 会把 `KNOWLEDGE_BASE_DIR` 指向 `./example-knowledge-base`，这是推荐的本地 starter workspace。
+
+The default `.env.example` points `KNOWLEDGE_BASE_DIR` at `./example-knowledge-base`, which is the recommended starter workspace for local exploration.
+
+## 快速启动：桌面开发模式 / Quick Start: Desktop Dev Mode
+
+桌面模式基于 Tauri，适合开发和实验，不应理解为面向最终用户的成熟安装包。
+
+Desktop mode uses Tauri and is intended for development / exploration, not as a polished end-user release.
+
+前置要求：
+
+Prerequisites:
+
+- Node.js 22 or 24
+- Rust stable toolchain
+- Python runtime
+- 平台相关的 Tauri 桌面依赖
+- Platform-specific Tauri desktop dependencies
+
+启动：
+
+Setup:
 
 ```bash
+cd gogo-app
+npm install
 npm run desktop:dev
 ```
 
-开发模式下，Tauri 会先通过 `beforeDevCommand` 自动启动本地 FastAPI，再等待 `http://127.0.0.1:8000` 就绪，所以不需要你手动先开一个 uvicorn。
+`npm run desktop:dev` 会通过 Tauri 的 `beforeDevCommand` 启动本地 FastAPI 后端，等待 `http://127.0.0.1:8000` 就绪，然后打开原生窗口。
 
-当前 Tauri 版会：
+`npm run desktop:dev` starts the local FastAPI backend through Tauri's `beforeDevCommand`, waits for `http://127.0.0.1:8000`, and opens the native shell.
 
-- 启动并托管本地 FastAPI 子进程
-- 探活 `/api/health`
-- 创建原生窗口并加载本地工作台页面
-- 通过桌面桥恢复“选择知识库目录”
-- 通过统一登录入口打开 Pi CLI，并尝试触发原生 `/login`，然后在登录完成后自动刷新 Provider 状态
+## 桌面构建说明 / Desktop Build Notes
 
-如果后续要构建桌面产物，再运行：
+仓库包含 Tauri 构建路径：
+
+The repository contains a Tauri build path:
 
 ```bash
 npm run desktop:build
 ```
 
-当前 `desktop:build` 已改为 **跨平台 Node 构建入口**，不再依赖 `sh`、`rm`、`mv`、`find` 这些 Unix shell 能力；默认会把桌面运行时收敛到 `src-tauri/desktop-runtime-staging/`，供 Tauri bundle 统一取用。  
-目前已经在 macOS 上重新验证通过；Windows 侧还需要实机或 CI runner 验收最终产物。
+当前边界：
 
-如果已经拿到当前平台解压后的 `pi` 运行目录，可以把其中的 `pi` 可执行文件路径传给构建脚本。`desktop:build` 现在会先读取 `gogo-app/.env`，所以也可以直接把这条配置写进 `.env`：
+Current caveats:
 
-```bash
-GOGO_DESKTOP_PI_BINARY=./pi-runtime/macos-arm64/pi npm run desktop:build
+- 曾经做过 macOS `.app` / `.dmg` 构建实验，但最终用户分发不是当前 maintenance 目标。
+- macOS `.app` / `.dmg` build experiments have existed, but final end-user distribution is not the current maintenance target.
+- Windows packaging 仍需要真实机器或 CI runner 验证。
+- Windows packaging still requires real machine or CI runner validation.
+- Bundling Pi 可能需要 `GOGO_DESKTOP_PI_BINARY` 或 `GOGO_DESKTOP_PI_RUNTIME_ROOT`。
+- Bundling Pi may require `GOGO_DESKTOP_PI_BINARY` or `GOGO_DESKTOP_PI_RUNTIME_ROOT`.
+- 签名、notarization、干净机器验证和自动更新尚未完成。
+- Signing, notarization, clean-machine validation, and auto-update are not complete.
+
+历史打包记录见：
+
+For the historical packaging notes, see:
+
+- [Desktop packaging guide](docs/desktop-packaging-guide.md)
+- [Release target and boundaries](docs/release-target-and-boundaries.md)
+- [Tauri migration plan](docs/tauri-migration-plan.md)
+
+## 仓库结构 / Repository Map
+
+```text
+gogo-app/
+  app/
+    backend/        FastAPI services, session handling, Pi RPC integration
+    frontend/       Single-page workspace assets
+  src-tauri/        Tauri desktop shell
+  example-knowledge-base/
+                    Starter local knowledge-base workspace
+  docs/             Architecture notes, release notes, and public-readiness plans
+  scripts/          Development and desktop build helpers
 ```
 
-也支持配置 runtime 根目录：
+## 关键文档 / Key Docs
 
-```bash
-GOGO_DESKTOP_PI_RUNTIME_ROOT=./pi-runtime
-```
+- [Docs index](docs/index.md)
+- [Open-source / portfolio release plan](docs/open-source-readiness-refactor-plan.md)
+- [Tolaria documentation lessons for gogo](docs/tolaria-documentation-lessons-for-gogo.md)
+- [gogo app architecture](docs/gogo-app-architecture.md)
+- [Agent architecture](docs/agent-architecture.md)
+- [Session management](docs/session-management.md)
+- [Frontend workbench elements](docs/frontend-workbench-elements.md)
 
-默认搜索顺序现在是：
+## 已知限制 / Known Limitations
 
-- `GOGO_DESKTOP_PI_BINARY`
-- `GOGO_DESKTOP_PI_RUNTIME_ROOT`
-- `gogo-app/pi-runtime`
-- `../pi-runtime`
+- 本项目处于 maintenance mode，不再积极开发新功能。
+- This project is in maintenance mode and is not actively feature-developed.
+- 当前代码库包含若干长文件，更适合配合索引文档阅读，而不是被视为已经完成理想模块拆分的架构。
+- The current codebase contains several large files that should be navigated with supporting docs rather than treated as a polished modular architecture.
+- 桌面端更适合理解为开发版 / 原型路径，而不是成熟消费级安装包。
+- The desktop app is best understood as a development build / prototype path, not a finished consumer installer.
+- Pi integration 是 chat 行为的核心，可能需要本地环境配置。
+- The Pi integration is central to chat behavior and may require local setup.
+- 当前还没有完整的公开 CI、release 或支持流程。
+- There is not yet a complete public CI, release, or support process.
+- 公开作品快照前，还建议补充截图、license、code index docs 和简洁的 concepts 文档。
+- Screenshots, license choice, code index docs, and a concise concepts document should be added before a polished public snapshot.
 
-当前 `desktop:build` 会先构建一个独立的桌面后端 runtime，再继续执行 Tauri bundle；在 macOS 上，非沙箱环境下已验证可产出 `.app/.dmg`。  
-当前桌面版已经把 bundled `pi` 接入了打包链：如果在构建时提供 `GOGO_DESKTOP_PI_BINARY`，`desktop:build` 会把该路径所在的上游 `pi` 运行目录整体打进安装包，并在运行时优先使用。  
-这是因为当前 upstream `pi` 在 macOS 上仍会读取同目录下的 `package.json` 等运行时文件，不能只复制单个 `pi` 文件。  
-如果既没有 bundled `pi`，又没检测到系统里的 `pi`，启动时才会退回到 fallback 安装引导，把 `pi` 装到 app data 下的托管目录。  
-Windows 首发安装介质目前先按 **NSIS `-setup.exe`** 收敛，不再把 `msi` 作为首发必做项。  
-需要特别注意的是：**macOS 上不能直接裸分发 upstream `pi` 运行目录**；它应作为 `gogo.app` 的内嵌运行时一起签名，并纳入主应用的 notarization。  
-但它**仍不应直接等同于已经完成最终用户分发安装包**，因为真正的安装器静默安装、Windows 构建验收、签名与干净机器回归还没完成。
+## 项目为什么存在 / Why This Project Exists
 
-当前 companion knowledge-base 的路径策略是：
+gogo 用来探索：一个本地文件型知识库，如何变成 AI-assisted research 的工作台。
 
-- 首次启动时会弹出系统目录选择器
-- 你可以选择把 companion knowledge-base 放到哪个目录
-- 选择结果会被记住，后续打包版会继续使用这个路径
-- 如果取消选择，则回退到应用自己的默认 app data 目录
-- 首次启动页当前已收敛成 3 步向导：欢迎页 -> 模型配置 -> 知识库目录；完成后才会进入主界面
-- 设置面板里的“诊断”页现在已经提供查看状态、打开日志和导出本地诊断摘要的入口
+gogo was built to explore how a local file-based knowledge base can become a workspace for AI-assisted research.
 
-一个已经踩过并修复的坑：
+项目组合了：
 
-- 打包后的 **debug** 桌面产物不能再按 `cfg!(debug_assertions)` 当作“开发态”处理
-- 否则 debug `.app` 会误去连接 `http://127.0.0.1:8000`，在没有本地 dev server 时表现为白屏
-- 当前已经改成：只有 `tauri dev` 才走开发服务器；所有打包产物都走 bundle 内后端
+The project combines:
 
-当前仍然保留的已知边界：
+- 可见的 knowledge-base layout：`wiki/`、`raw/`、`inbox/`、`skills/`
+- A visible knowledge-base layout: `wiki/`, `raw/`, `inbox/`, `skills/`
+- 用于阅读和编辑本地知识的 browser-like workspace
+- A browser-like workspace for reading and editing local knowledge
+- 用于研究辅助的 chat / session layer
+- A chat/session layer for research assistance
+- 作为 agent runtime bridge 的 Pi RPC
+- Pi RPC as an agent runtime bridge
+- 用于桌面端实验的 Tauri shell
+- A Tauri shell for desktop experimentation
 
-- 对外目标已经明确是“普通用户可直接安装”，但当前尚未达到这个交付标准
-- macOS `.app/.dmg` 基础 bundle 已能产出，但 Windows / macOS 最终用户安装包尚未完成验收闭环
-- 桌面构建已包含独立后端 runtime，且构建入口已改成跨平台 Node 脚本；但 Windows 侧构建与跨平台验收仍未完成
-- companion knowledge-base 已可随安装包资源提供，并在发布态默认 provision 到可写目录；但安装过程中让用户自行决定路径的链路尚未落地
-- 当前聊天与 OAuth 登录链路仍依赖 `pi`，但桌面版已经支持在启动阶段检测并安装到托管目录
-- 当前仅计划支持 API key 型 provider，以及 `pi` 已稳定支持且桌面引导已验证通过的 OAuth
-- 首发阶段 API key 仅保存在本机认证文件中，不自动上传；当前暂不接入 macOS Keychain / Windows Credential Manager
-- 自动更新尚未实现
+它也是一次在真实项目规模下使用 AI-generated code 的记录。下一步不是假装代码库完美，而是把它的原则、边界和导航写清楚，让人类和 coding agents 都能理解它。
 
-Tauri 设计与当前实现边界见：
+It is also a record of working with AI-generated code at meaningful project scale. The next step is not to pretend the codebase is perfect, but to make its principles, boundaries, and navigation clear enough that both humans and coding agents can understand it.
 
-- [docs/tauri-migration-plan.md](docs/tauri-migration-plan.md)
-- [docs/release-target-and-boundaries.md](docs/release-target-and-boundaries.md)
-- [docs/desktop-packaging-guide.md](docs/desktop-packaging-guide.md)
+## License
 
-## 关键文档
+当前仓库还没有 public license file。正式作为可复用开源项目前，请先添加 `LICENSE`。如果没有特殊原因，轻量作品型发布建议使用 MIT。
 
-- [docs/release-target-and-boundaries.md](docs/release-target-and-boundaries.md)
-- [docs/gogo-app-architecture.md](docs/gogo-app-architecture.md)
-- [docs/frontend-workbench-elements.md](docs/frontend-workbench-elements.md)
-- [docs/session-management.md](docs/session-management.md)
-- [docs/tauri-migration-plan.md](docs/tauri-migration-plan.md)
-- [docs/index.md](docs/index.md)
+This repository does not currently include a public license file. Add a `LICENSE` before treating the project as reusable open source. MIT is the recommended default for a lightweight portfolio release unless there is a specific reason to choose another license.
