@@ -355,5 +355,5 @@ open src-tauri/target/release/bundle/macos/gogo.app
 - `app/backend/config.py`
 - `app/backend/session_manager.py`
 - `app/backend/main.py`
-- `docs/desktop-packaging-guide.md`
-- `docs/problem-log.md`
+- `docs/archive/packaging/desktop-packaging-guide.md`
+- `docs/archive/logs/problem-log.md`

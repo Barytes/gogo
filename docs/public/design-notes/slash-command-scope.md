@@ -1,10 +1,10 @@
 # Slash Command Scope
 
-**最后更新**: 2026-04-16
+**最后更新**: 2026-04-28
 
 ## 背景
 
-`gogo-app` 未来如果支持聊天输入框中的 slash 命令，需要先明确一个核心问题：
+`gogo-app` 已经支持聊天输入框中的 slash 命令入口。这个文档记录它的产品边界和当前实现，避免 slash 命令从“知识库能力入口”滑向“Pi runtime 控制台”。
 
 - 这些 slash 命令到底来自哪里
 - `gogo-app` 应当向用户暴露哪些命令
@@ -156,17 +156,17 @@
 
 更适合作为 skill 的补充机制，而不是 slash 命令的唯一来源。
 
-## 推荐决策
+## 当前决策
 
-当前推荐：
+当前实现采用这个边界：
 
-- `gogo-app` 默认只暴露 knowledge-base 中的 `skills`
+- `gogo-app` 默认只暴露 knowledge-base 中的 `skills` 和 `schemas`
 - 不直接暴露 `Pi agent` 内置 slash 命令
-- `schemas` 作为 skill 的参数结构或后续增强层存在，不单独作为第一批 slash 命令主来源
+- `schemas` 先作为轻量命令候选进入 slash 列表，但暂不提供 schema 驱动参数表单
 
 一句话总结：
 
-> `gogo-app` 的 slash 命令应该代表“知识库能力”，而不是“Pi runtime 控制面”。
+> `gogo-app` 的 slash 命令应该代表“知识库侧能力和结构”，而不是“Pi runtime 控制面”。
 
 ## 为什么这个决策更适合 gogo-app
 
@@ -188,7 +188,7 @@
 
 ### 2. 更利于知识库本身演进
 
-如果 slash 命令只来自 skills，那么每新增一个命令，本质上都是在增强 knowledge-base：
+如果 slash 命令只来自 knowledge-base 的 skills 和 schemas，那么每新增一个命令，本质上都是在增强 knowledge-base：
 
 - 新增一个技能
 - 为技能写说明
@@ -211,7 +211,7 @@ Pi 内置命令往往带有明显的系统性、运行时性和环境依赖。
 
 ### 4. 便于形成统一 UI 心智
 
-如果 slash 命令只表示 skills，那么用户很容易理解：
+如果 slash 命令只表示 knowledge-base capabilities，那么用户很容易理解：
 
 - 输入 `/` 看到的是“这套知识库会做什么”
 - 不是“底层 agent 支持什么命令”
@@ -223,11 +223,11 @@ Pi 内置命令往往带有明显的系统性、运行时性和环境依赖。
 - 示例输入
 - 团队共享技能目录
 
-## 对 schemas 的位置建议
+## 对 schemas 的位置说明
 
-推荐把 schemas 放在 skill 之后，而不是与 skill 并列为第一层 slash 来源。
+当前代码已经把 schemas 放进 slash 列表，但它们仍排在 skills 之后，并以 `Schema` 徽标区分。
 
-更合适的关系是：
+长期更合适的关系仍然是：
 
 - skill 决定“做什么”
 - schema 决定“这个 skill 的结构化输入长什么样”
@@ -240,6 +240,8 @@ Pi 内置命令往往带有明显的系统性、运行时性和环境依赖。
   - 背后可以引用 `paper_card.schema.json`
 
 这样用户看到的是一个清晰的命令，而不是直接面对 schema 名称本身。
+
+当前第一版为了暴露 knowledge-base 中已经存在的结构化能力，允许 schema 以轻量候选项出现；后续如果做参数表单，应优先让 schema 服务于具体 skill，而不是把 schema 面板做成另一套主入口。
 
 ## 可选折中方案
 
@@ -259,7 +261,7 @@ Pi 内置命令往往带有明显的系统性、运行时性和环境依赖。
 
 第一阶段建议只做下面这些：
 
-1. `/` 只拉起 skills 自动补全
+1. `/` 拉起 knowledge-base 的 `skills + schemas` 自动补全
 2. 每个 skill 显示：
    - 命令名
    - 一句话说明
@@ -293,12 +295,12 @@ Pi 内置命令往往带有明显的系统性、运行时性和环境依赖。
 
 ## Slash 命令在 UI 上应该怎么呈现
 
-如果采用“slash 命令只来自 knowledge-base skills”这条路线，那么 UI 也应该围绕这个边界来设计。
+如果采用“slash 命令只来自 knowledge-base capabilities”这条路线，那么 UI 也应该围绕这个边界来设计。
 
 核心原则是：
 
 - slash 面板应当像“知识库能力选择器”，而不是“系统命令终端”
-- 默认帮助用户发现 skill，而不是帮助用户记忆命令语法
+- 默认帮助用户发现 capability，而不是帮助用户记忆命令语法
 - 能插入草稿就不要直接执行，避免误触
 
 ### 推荐的第一层交互
@@ -307,7 +309,7 @@ Pi 内置命令往往带有明显的系统性、运行时性和环境依赖。
 
 1. 用户在聊天输入框输入 `/`
 2. 弹出一个轻量自动补全面板
-3. 面板只显示当前知识库已注册的 skills
+3. 面板显示当前知识库已注册的 skills 与 schemas，并按来源分组
 4. 选择后将命令插入输入框，默认不自动发送
 
 每个候选项建议显示：
@@ -410,7 +412,7 @@ slash 命令不应该变成一个脱离聊天的独立系统。
 
 ### 与 schema 的关系
 
-如果某个 skill 背后有 schema，UI 不应先暴露 schema 名，而应表现为：
+当前第一版会直接显示 schema 候选项。后续如果某个 skill 背后有 schema，UI 仍应优先表现为：
 
 - 用户先选 skill
 - 只有当这个 skill 需要结构化参数时
@@ -418,31 +420,31 @@ slash 命令不应该变成一个脱离聊天的独立系统。
 
 也就是说：
 
-- 用户看见的是“skill”
-- schema 只作为其背后的结构层
+- 当前第一版用户会看见 `Skill` 和 `Schema` 两类候选
+- 后续更完整的参数化能力应尽量让 schema 回到 skill 背后的结构层
 
 ### 最推荐的第一版 UI
 
 第一版最推荐做法：
 
 1. 聊天输入框输入 `/`
-2. 弹出 skills 自动补全列表
+2. 弹出 skills + schemas 自动补全列表
 3. 选中后把命令插入草稿
 4. 如果 skill 需要参数，先弹最小参数面板再插入草稿
 5. 用户自己决定是否发送
 
 一句话总结：
 
-> slash UI 应该像“知识库技能选择器”，而不是“Pi 命令控制台”。
+> slash UI 应该像“知识库能力选择器”，而不是“Pi 命令控制台”。
 
 ## 最终建议
 
 最终建议是：
 
 - `gogo-app` 不要试图成为 `Pi` 的通用 slash 命令前端
-- `gogo-app` 应该把 slash 命令定义为 knowledge-base 的技能入口
+- `gogo-app` 应该把 slash 命令定义为 knowledge-base 的 capability 入口
 - `Pi` 继续作为底层 agent/runtime
-- knowledge-base 的 `skills` 才是用户在产品层感知到的命令系统
+- knowledge-base 的 `skills` 和 `schemas` 才是用户在产品层感知到的命令系统
 
 这条路线的最大好处不是“实现更简单”，而是：
 

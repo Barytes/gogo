@@ -2,9 +2,9 @@
 
 > 本文档描述当前 `gogo-app` 中 Agent 后端的真实实现。
 >
-> 上层产品/应用架构见 [gogo-app-architecture.md](gogo-app-architecture.md)。
+> 上层产品/应用架构见 [Architecture](../architecture.md)。
 
-**最后更新**: 2026-04-18
+**最后更新**: 2026-04-28
 
 ---
 
@@ -292,7 +292,7 @@ workbench.js / chat.js
 
 ---
 
-## 10. 当前实现边界
+## 11. 当前实现边界
 
 已实现：
 
@@ -303,19 +303,17 @@ workbench.js / chat.js
 - Model Provider profile + 托管 extension
 - settings / diagnostics / inbox / runtime options API
 - 桌面版 Pi CLI 登录桥与 macOS / Windows 开发态直连兜底
-
-未实现：
-
-- 桌面版 Wiki Markdown 编辑
-- 桌面版 slash 命令桥接
+- Markdown 创建、保存、删除流程，包括桌面版保存路径选择器
+- Chat 输入框 slash 命令入口，当前来源是 knowledge-base 的 `skills + schemas`
 
 ---
 
-## 11. 相关文件
+## 12. 相关文件
 
 - `app/backend/agent_service.py`
 - `app/backend/session_manager.py`
 - `app/backend/pi_rpc_client.py`
 - `app/backend/main.py`
 - `app/backend/config.py`
-- `docs/public/session-management.md`
+- [Session management](session-management.md)
+- [Architecture](../architecture.md)

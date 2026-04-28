@@ -1,5 +1,7 @@
 # Code-Doc Mapping
 
+> Archived document. This mapping reflects an older documentation layout and is kept only as migration history. For the current documentation map, use [`../../index.md`](../../index.md) and the code reference sections under `docs/public/backend/` and `docs/public/frontend/`.
+
 This document defines how code explanation docs map to implementation files.
 
 ## Rule

@@ -1,6 +1,6 @@
 # Knowledge Base Guide
 
-**Last updated:** 2026-04-27
+**Last updated:** 2026-04-28
 
 gogo is built around an llm-wiki-style local knowledge base. The knowledge base is a normal folder on disk, not a database hidden inside the app.
 

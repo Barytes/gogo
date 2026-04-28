@@ -2,9 +2,9 @@
 
 > 适用代码：`app/frontend/assets/chat.js`、`app/backend/main.py`、`app/backend/session_manager.py`、`app/backend/pi_rpc_client.py`、`app/backend/config.py`
 >
-> 上层产品/应用架构见 [gogo-app-architecture.md](gogo-app-architecture.md)。
+> 上层产品/应用架构见 [Architecture](../architecture.md)。
 
-**更新时间**: 2026-04-18
+**更新时间**: 2026-04-28
 
 ---
 
@@ -388,4 +388,5 @@ Session 主链路已收敛为 **RPC-only + session-only chat API**：
 - `app/backend/pi_rpc_client.py`
 - `app/backend/main.py`
 - `app/frontend/assets/chat.js`
-- `docs/public/agent-architecture.md`
+- [Agent architecture](agent-architecture.md)
+- [Architecture](../architecture.md)

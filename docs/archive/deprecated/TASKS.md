@@ -9,9 +9,9 @@
 
 跨目录任务已拆分：
 
-- `gogo-client`：[/Users/beiyanliu/Desktop/gogo/gogo-client/TASKS.md](/Users/beiyanliu/Desktop/gogo/gogo-client/TASKS.md)
-- `gogo-server`：[/Users/beiyanliu/Desktop/gogo/gogo-server/TASKS.md](/Users/beiyanliu/Desktop/gogo/gogo-server/TASKS.md)
-- `knowledge-base`：[/Users/beiyanliu/Desktop/gogo/knowledge-base/TASKS.md](/Users/beiyanliu/Desktop/gogo/knowledge-base/TASKS.md)
+- `gogo-client`：historical local path `/Users/beiyanliu/Desktop/gogo/gogo-client/TASKS.md`
+- `gogo-server`：historical local path `/Users/beiyanliu/Desktop/gogo/gogo-server/TASKS.md`
+- `knowledge-base`：historical local path `/Users/beiyanliu/Desktop/gogo/knowledge-base/TASKS.md`
 
 ## 代码现状
 
@@ -481,9 +481,9 @@
 
 对应任务请见：
 
-- [gogo-client/TASKS.md](/Users/beiyanliu/Desktop/gogo/gogo-client/TASKS.md)
-- [gogo-server/TASKS.md](/Users/beiyanliu/Desktop/gogo/gogo-server/TASKS.md)
-- [knowledge-base/TASKS.md](/Users/beiyanliu/Desktop/gogo/knowledge-base/TASKS.md)
+- Historical local path: `/Users/beiyanliu/Desktop/gogo/gogo-client/TASKS.md`
+- Historical local path: `/Users/beiyanliu/Desktop/gogo/gogo-server/TASKS.md`
+- Historical local path: `/Users/beiyanliu/Desktop/gogo/knowledge-base/TASKS.md`
 
 ## 变更日志
 

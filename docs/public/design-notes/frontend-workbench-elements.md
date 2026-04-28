@@ -1,6 +1,6 @@
 # Frontend Workbench Elements
 
-**最后更新**: 2026-04-18
+**最后更新**: 2026-04-28
 
 > 本文档说明 `gogo-app` 前端页面中各个主要元素的职责、状态来源与实现位置。  
 > 目标不是解释后端 RPC，而是回答“页面上这个区域/按钮是干什么的、由谁实现、和谁联动”。
@@ -167,7 +167,7 @@
   - `desktop-pi-login`
   - `manual-tokens`
 - 保存、删除 provider 配置
-- 为未来桌面版预留 `Pi 登录` 入口
+- 在桌面运行时打开终端 Pi 登录入口
 
 数据来源：
 
@@ -182,9 +182,10 @@
 
 主要元素：
 
-- `#security-mode-select`
-- `#save-security-settings-button`
-- `#open-security-log-button`
+- `#install-pi-button`
+- `#open-diagnostics-kb-button`
+- `#open-diagnostics-log-button`
+- `#export-diagnostics-summary-button`
 - `#refresh-diagnostics-button`
 - `#diagnostics-status-chips`
 - `#diagnostics-kb-list`
@@ -196,24 +197,25 @@
 
 功能：
 
-- 切换 Pi 安全模式（只读 / 允许写文件 / 允许执行命令）
+- 展示 Pi 安全模式（只读 / 允许写文件 / 允许执行命令），但不在 Diagnostics 区直接切换
 - 展示当前受信任工作区、托管安全 extension 路径和安全日志路径
 - 展示最近的 `bash / write / edit` allow / block 审计记录
 - 展示知识库名称、路径和 `wiki/raw/inbox` 目录状态
 - 展示 session namespace、session 目录、活跃会话数
 - 展示 Pi 命令、命令路径、超时、工作目录、当前模型/思考
 - 展示 provider profile 数量、默认 provider/model/thinking
+- 打开知识库目录、打开后端日志、导出诊断摘要、刷新诊断状态
+- 在需要时显示 Pi 安装入口
 
 数据来源：
 
 - `GET /api/settings/diagnostics`
-- `PATCH /api/settings/security`
 
 ## 5. Wiki 区域元素
 
-### 5.1 `#mode-wiki` / `#mode-raw`
+### 5.1 `#mode-wiki` / `#mode-inbox` / `#mode-raw`
 
-- 功能：切换结构化 `Wiki` 页面和原始 `Raw` 文件。
+- 功能：切换结构化 `Wiki` 页面、待处理 `Inbox` 文件和原始 `Raw` 文件。
 - 实现：`wiki.js -> setMode()`
 
 ### 5.2 `#wiki-search`
@@ -221,11 +223,12 @@
 - 功能：搜索当前来源下的列表。
 - 请求：
   - `/api/wiki/search`
+  - `/api/inbox/search`
   - `/api/raw/search`
 
 ### 5.3 `#wiki-list`
 
-- 功能：展示 Wiki / Raw 条目列表。
+- 功能：展示 Wiki / Inbox / Raw 条目列表。
 - 实现：`wiki.js -> renderList()`
 - 当前页条目会加 `.active`
 
@@ -263,9 +266,10 @@
 - 功能：展示当前页正文。
 - 页面类型：
   - markdown 页面
-  - 文本 raw
-  - PDF raw
-  - 二进制 raw
+  - 文本 inbox/raw
+  - PDF inbox/raw
+  - 图片 inbox/raw
+  - 二进制 inbox/raw
 
 页内链接行为：
 
@@ -368,8 +372,8 @@
 - 安全模式菜单与模型 / 思考水平菜单共用同一套 `chat-control-button + chat-control-menu` 尺寸和交互
 - 当 Pi 在当前模式下触发 `bash / write / edit` 阻断时，会拉起 `#chat-security-modal`
 - 用户可以：
-  - `允许这一次`：通过后端创建一次性审批，并在同一会话里要求 Pi 只重试这一个已批准操作
-  - `禁止并告知 Pi`：输入理由后，前端会先终止当前回复，再把这段约束作为新的 user turn 继续推进任务
+  - `允许这一次`：通过当前 Pi RPC `extension_ui_response` 把 `allow_once` 回写给正在等待的 `tool_call`
+  - `禁止并告知 Pi`：先回写 `deny_with_reason`，再把用户输入的理由作为后续 extension UI 响应发回同一轮请求
 
 功能：
 
@@ -378,6 +382,7 @@
 - 切换当前模型
 - 切换当前思考水平
 - 打开当前知识库 `skills + schemas` 的 slash 命令面板
+- 切换当前 Pi 安全模式
 - 当当前模型不支持某个思考水平时，显示轻量提示
 
 slash 面板当前会：

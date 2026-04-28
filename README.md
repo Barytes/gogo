@@ -150,5 +150,5 @@ If you want to know more about this project, you can begin with the following do
 - [文档索引 / Documentation index](docs/index.md)
 - [开发者文档 / Developer guide](docs/public/developer-guide.md)
 - [设计原则 / Design principles](docs/public/design-principles.md)
-- [架构概览 / Architecture overview](docs/public/architecture-overview.md)
+- [架构 / Architecture](docs/public/architecture.md)
 - [知识库指南 / Knowledge base guide](docs/public/knowledge-base-guide.md)

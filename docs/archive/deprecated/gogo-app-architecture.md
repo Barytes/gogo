@@ -4,7 +4,7 @@
 
 > 本文档描述 `gogo-app` 这个应用产品本身的职责、边界与当前前后端架构。  
 > 早期项目级关系文档已不再作为当前公开文档维护。  
-> knowledge-base 的内容与规范架构见 [knowledge-base-architecture.md](knowledge-base-architecture.md)。
+> knowledge-base 的内容与规范架构见 [knowledge-base guide](../../public/knowledge-base-guide.md)。
 
 ## 1. 定位
 
@@ -16,7 +16,7 @@
 - Web 版与桌面开发版主要承担开发、验证和过渡职责
 
 但当前仓库的**实际发布边界**仍需区分“开发者可运行的桌面版”和“最终用户双击可安装的桌面版”。  
-当前对外发布目标、支持范围与已知限制的历史记录见 [release-target-and-boundaries.md](../archive/planning/release-target-and-boundaries.md)。
+当前对外发布目标、支持范围与已知限制的历史记录见 [release-target-and-boundaries.md](../planning/release-target-and-boundaries.md)。
 
 它的目标是：
 
@@ -147,7 +147,7 @@ Browser
 - 消息历史基础：Pi 原生 session JSONL
 - 当前为 RPC-only 架构
 
-更细的 session 机制见 [session-management.md](session-management.md)。
+更细的 session 机制见 [session-management.md](../../public/design-notes/session-management.md)。
 
 ## 5.1 Model Provider 与认证
 
@@ -206,7 +206,7 @@ Windows / macOS 的 `desktop:dev` 还保留 Python 后端直连兜底：当 Taur
 - 当用户切到“允许执行命令”时，仍会保留对明显危险命令的默认阻断
 - 所有 `bash / write / edit` 的 allow / block 决策只写入本地安全日志，不自动上传
 
-更详细的边界说明见 [pi-security-boundary.md](pi-security-boundary.md)。
+更详细的边界说明见 [pi-security-boundary.md](../../public/design-notes/pi-security-boundary.md)。
 
 聊天输入框区域还额外承载了两个和知识库工作流强相关的能力：
 
@@ -245,10 +245,10 @@ Windows / macOS 的 `desktop:dev` 还保留 Python 后端直连兜底：当 Taur
 
 ## 8. 实现细节文档
 
-- [agent-architecture.md](agent-architecture.md) - gogo-app 中 Agent 后端实现细节
-- [session-management.md](session-management.md) - gogo-app 中 Session 管理与恢复机制
-- [frontend-workbench-elements.md](frontend-workbench-elements.md) - gogo-app 前端页面元素、状态与交互实现说明
-- [pi-security-boundary.md](pi-security-boundary.md) - 首发前最小安全边界、默认限制与后续增强方向
-- [documentation-cleanup-audit-2026-04-15.md](../archive/logs/documentation-cleanup-audit-2026-04-15.md) - 当前文档覆盖性审计结果与本轮清理范围
-- [desktop-packaging-options.md](../archive/packaging/desktop-packaging-options.md) - gogo-app 桌面应用封装方案评估与推荐路线
-- [tauri-migration-plan.md](../archive/packaging/tauri-migration-plan.md) - 当前 Tauri 桌面壳实现与后续迁移顺序
+- [agent-architecture.md](../../public/design-notes/agent-architecture.md) - gogo-app 中 Agent 后端实现细节
+- [session-management.md](../../public/design-notes/session-management.md) - gogo-app 中 Session 管理与恢复机制
+- [frontend-workbench-elements.md](../../public/design-notes/frontend-workbench-elements.md) - gogo-app 前端页面元素、状态与交互实现说明
+- [pi-security-boundary.md](../../public/design-notes/pi-security-boundary.md) - 首发前最小安全边界、默认限制与后续增强方向
+- [documentation-cleanup-audit-2026-04-15.md](../logs/documentation-cleanup-audit-2026-04-15.md) - 当前文档覆盖性审计结果与本轮清理范围
+- [desktop-packaging-options.md](../packaging/desktop-packaging-options.md) - gogo-app 桌面应用封装方案评估与推荐路线
+- [tauri-migration-plan.md](../packaging/tauri-migration-plan.md) - 当前 Tauri 桌面壳实现与后续迁移顺序

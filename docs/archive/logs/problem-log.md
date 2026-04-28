@@ -33,7 +33,7 @@
 
 - `scripts/desktop-build.mjs` 在 Tauri build 结束后，强制同步 `app/`、`backend-runtime/`、`pi-runtime/`、`knowledge-base/` 到最终 `.app`
 - 新增专项文档：
-  - [desktop-packaging-regressions.md](desktop-packaging-regressions.md)
+  - [desktop-packaging-regressions.md](../packaging/desktop-packaging-regressions.md)
 - 后续发包必须按专项文档里的 bundle 完整性、启动冒烟、RPC 冒烟、干净机器验证清单执行
 
 ### 验证建议
@@ -44,7 +44,7 @@
 4. 创建真实会话并发送消息
 5. 切换模型与思考水平，确认刷新后仍正确
 
-> 详细复盘与后续发包清单见 [desktop-packaging-regressions.md](desktop-packaging-regressions.md)。
+> 详细复盘与后续发包清单见 [desktop-packaging-regressions.md](../packaging/desktop-packaging-regressions.md)。
 
 ## 2026-04-16：重开 app 后，“思考过程”恢复成零散短句
 
